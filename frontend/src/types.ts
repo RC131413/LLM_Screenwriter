@@ -1,0 +1,60 @@
+export type BlockType = 'action' | 'character' | 'dialogue' | 'parenthetical' | 'transition';
+export type SceneStatus = 'draft' | 'review' | 'ready';
+export type View = 'script' | 'outline' | 'characters';
+
+export interface ScriptBlock { id: string; type: BlockType; text: string }
+export interface Scene {
+  id: string;
+  title: string;
+  heading: string;
+  act: number;
+  status: SceneStatus;
+  synopsis: string;
+  characterIds: string[];
+  blocks: ScriptBlock[];
+  notes: string;
+}
+export interface Character {
+  id: string;
+  name: string;
+  age: string;
+  role: string;
+  goal: string;
+  flaw: string;
+  voice: string;
+}
+export interface Project {
+  id: string;
+  title: string;
+  genre: string;
+  logline: string;
+  acts: number[];
+  scenes: Scene[];
+  characters: Character[];
+}
+export interface SceneVariant { id: string; title: string; description: string; blocks: ScriptBlock[] }
+
+export const blockLabels: Record<BlockType, string> = {
+  action: 'Akcja', character: 'Postać', dialogue: 'Dialog',
+  parenthetical: 'Didaskalia', transition: 'Przejście',
+};
+export const statusLabels: Record<SceneStatus, string> = {
+  draft: 'Szkic', review: 'Do sprawdzenia', ready: 'Gotowa',
+};
+export const newId = () => crypto.randomUUID();
+
+export const screenplayModel = 'Bielik 11B';
+
+export function formatAct(number: number): string {
+  if (number > 3999) return String(number);
+  const numerals: [number, string][] = [
+    [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'],
+    [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'],
+    [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+  ];
+  let label = '';
+  for (const [value, numeral] of numerals) {
+    while (number >= value) { label += numeral; number -= value; }
+  }
+  return label;
+}

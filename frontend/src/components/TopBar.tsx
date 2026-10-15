@@ -1,10 +1,10 @@
-import { Download, FileText, PanelLeft, PanelRight, Plus, Settings2 } from 'lucide-react';
+import { Download, FileText, PanelLeft, PanelRight, Pencil, Plus, Settings2 } from 'lucide-react';
 import type { Project } from '../types';
 import { IconButton } from './IconButton';
 
 interface Props {
   projects: Project[]; project: Project;
-  onProject: (id: string) => void; onNewProject: () => void; onSettings: () => void; onExport: () => void;
+  onProject: (id: string) => void; onNewProject: () => void; onEditProject: () => void; onSettings: () => void; onExport: () => void;
   onSidebar: () => void; onAssistant: () => void; sidebarOpen: boolean; assistantOpen: boolean;
 }
 export function TopBar(props: Props) {
@@ -15,6 +15,7 @@ export function TopBar(props: Props) {
       <select aria-label="Wybierz projekt" value={props.project.id} onChange={event => props.onProject(event.target.value)}>
         {props.projects.map(project => <option key={project.id} value={project.id}>{project.title}</option>)}
       </select>
+      <IconButton label="Edytuj projekt" onClick={props.onEditProject}><Pencil size={14} /></IconButton>
       <IconButton label="Nowy projekt" onClick={props.onNewProject}><Plus size={16} /></IconButton>
     </div>
     <div className="topbar-actions">

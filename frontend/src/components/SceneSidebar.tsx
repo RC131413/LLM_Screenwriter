@@ -14,9 +14,9 @@ export function SceneSidebar({ project, sceneId, onSelect, onClose }: Props) {
     <div className="sidebar-section-title"><span><Clapperboard size={15} />Sceny <small>{project.scenes.length}</small></span></div>
     <label className="scene-search"><Search size={14} /><input aria-label="Szukaj sceny" placeholder="Szukaj sceny…" value={query} onChange={event => setQuery(event.target.value)} /></label>
     <nav className="scene-list" aria-label="Sceny projektu">
-      {project.acts.map(act => <section className="act-group" key={act}>
+      {project.acts.map(({ act_number: act, title }) => <section className="act-group" key={act}>
         <button className="act-heading" aria-expanded={query ? true : !collapsed.includes(act)} onClick={() => setCollapsed(current => current.includes(act) ? current.filter(item => item !== act) : [...current, act])}>
-          <ChevronDown size={13} className={!query && collapsed.includes(act) ? 'collapsed' : ''} /><span>AKT {formatAct(act)}</span><small>{project.scenes.filter(scene => scene.act === act).length}</small>
+          <ChevronDown size={13} className={!query && collapsed.includes(act) ? 'collapsed' : ''} /><span>AKT {formatAct(act)}{title && ` · ${title}`}</span><small>{project.scenes.filter(scene => scene.act === act).length}</small>
         </button>
         {(query || !collapsed.includes(act)) && visible.filter(scene => scene.act === act).map(scene => <button key={scene.id} className={`scene-item ${scene.id === sceneId ? 'selected' : ''}`} onClick={() => onSelect(scene.id)} aria-current={scene.id === sceneId ? 'page' : undefined}>
           <span className="scene-number">{String(project.scenes.indexOf(scene) + 1).padStart(2, '0')}</span><span className="scene-item-text"><strong>{scene.title}</strong><small>{scene.heading.replace(/^(WN\.|PL\.)\s*/, '').split(' — ')[0]}</small></span><span className={`scene-status-dot ${scene.status}`} title={scene.status === 'ready' ? 'Gotowa' : scene.status === 'review' ? 'Do sprawdzenia' : 'Szkic'} />

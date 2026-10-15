@@ -6,12 +6,18 @@ const blocks = (items: [ScriptBlock['type'], string][]): ScriptBlock[] =>
 export const mockProjects: Project[] = [
   {
     id: 'last-tram', title: 'Ostatni kurs', genre: 'Dramat / thriller',
-    acts: [1, 2, 3],
+    acts: [
+      { act_number: 1, title: 'Ostatni pasażer', summary: 'Anna rusza na nocny kurs. Nieznajomy pasażer wręcza jej kopertę z tropem dotyczącym zaginionego ojca.' },
+      { act_number: 2, title: 'Ślady przeszłości', summary: 'Wizyta na zamkniętej stacji ujawnia sekret rodziny. Anna konfrontuje brata z tym, co odkryła.' },
+      { act_number: 3, title: 'Pierwszy kurs', summary: 'Anna poznaje prawdę i podejmuje decyzję, jak żyć z nią dalej.' },
+    ],
+    synopsis: 'Motornicza Anna od lat szuka odpowiedzi na pytanie o zniknięcie ojca. Podczas ostatniego nocnego kursu spotyka Marka, który zostawia jej kopertę. Trop prowadzi na zamkniętą stację i zmusza ją do konfrontacji z rodzinną tajemnicą.',
+    target_audience: 'Dorośli widzowie kina niezależnego i dramatów psychologicznych',
     logline: 'Podczas ostatniego nocnego kursu motornicza spotyka człowieka, który zna szczegóły zaginięcia jej ojca.',
     characters: [
-      { id: 'anna', name: 'ANNA', age: '32', role: 'Protagonistka · motornicza', goal: 'Poznać prawdę o zniknięciu ojca.', flaw: 'Nie ufa ludziom i za wszelką cenę chce mieć kontrolę.', voice: 'Krótkie, konkretne zdania. Pod presją odpowiada pytaniem.' },
-      { id: 'marek', name: 'MAREK', age: '58', role: 'Tajemniczy pasażer', goal: 'Przekazać Annie list, zanim odnajdzie go dawny wspólnik.', flaw: 'Ukrywa prawdę za półsłówkami.', voice: 'Spokojny, unika nazwisk. Często urywa zdania.' },
-      { id: 'tomek', name: 'TOMEK', age: '34', role: 'Brat Anny', goal: 'Przekonać siostrę, żeby przestała szukać ojca.', flaw: 'Myli troskę z kontrolą.', voice: 'Potoczny język, ironia maskująca lęk.' },
+      { id: 'anna', name: 'ANNA', age: '32', role: 'Protagonistka · motornicza', goal: 'Poznać prawdę o zniknięciu ojca.', flaw: 'Nie ufa ludziom i za wszelką cenę chce mieć kontrolę.', voice: 'Krótkie, konkretne zdania. Pod presją odpowiada pytaniem.', appearance: 'Ciemne włosy spięte z tyłu, granatowy mundur. Podczas rozmowy unika kontaktu wzrokowego.', backstory: 'Po zniknięciu ojca została w rodzinnym mieście. Pracuje w tej samej zajezdni, w której pracował on.' },
+      { id: 'marek', name: 'MAREK', age: '58', role: 'Tajemniczy pasażer', goal: 'Przekazać Annie list, zanim odnajdzie go dawny wspólnik.', flaw: 'Ukrywa prawdę za półsłówkami.', voice: 'Spokojny, unika nazwisk. Często urywa zdania.', appearance: 'Siwiejący, szczupły. Nosi stary płaszcz i stale sprawdza wewnętrzną kieszeń.', backstory: 'Przed laty pracował z ojcem Anny. Przez długi czas nie miał odwagi opowiedzieć rodzinie, co wydarzyło się na stacji.' },
+      { id: 'tomek', name: 'TOMEK', age: '34', role: 'Brat Anny', goal: 'Przekonać siostrę, żeby przestała szukać ojca.', flaw: 'Myli troskę z kontrolą.', voice: 'Potoczny język, ironia maskująca lęk.', appearance: 'Krótko ostrzyżony, sportowa kurtka. Nerwowo obraca telefon w dłoni.', backstory: 'Po zaginięciu ojca przejął opiekę nad rodziną. Ukrył przed Anną list, wierząc, że ją chroni.' },
     ],
     scenes: [
       { id: 'depot', title: 'Przed ostatnim kursem', heading: 'WN. ZAJEZDNIA TRAMWAJOWA — NOC', act: 1, status: 'ready', synopsis: 'Anna odbiera telefon od brata i rusza na ostatni kurs.', characterIds: ['anna', 'tomek'], notes: '', blocks: blocks([
@@ -54,9 +60,15 @@ export const mockProjects: Project[] = [
   },
   {
     id: 'signal', title: 'Sygnał', genre: 'Science fiction / krótki metraż',
-    acts: [1, 2, 3],
+    acts: [
+      { act_number: 1, title: 'Transmisja', summary: 'Ewa rozpoznaje własny głos w tajemniczym sygnale radiowym.' },
+      { act_number: 2, title: 'Zakłócenia', summary: 'Ewa szuka źródła transmisji i próbuje zmienić zapowiedziane wydarzenia.' },
+      { act_number: 3, title: 'Odpowiedź', summary: 'Ewa decyduje, jak odpowiedzieć na wiadomość z przyszłości.' },
+    ],
+    synopsis: 'Techniczka radiowa odbiera sygnał, w którym słyszy swój własny głos z następnego dnia. Próbuje ustalić, czy transmisja jest ostrzeżeniem, czy początkiem zdarzeń, przed którymi chce uciec.',
+    target_audience: 'Widzowie kameralnego science fiction i krótkich metraży',
     logline: 'Techniczka radiowa odbiera transmisję ze swojego mieszkania, wysłaną dzień później.',
-    characters: [{ id: 'ewa', name: 'EWA', age: '29', role: 'Protagonistka · techniczka', goal: 'Ustalić źródło sygnału.', flaw: 'Woli pomiary od własnej intuicji.', voice: 'Precyzyjna, rzeczowa, używa terminów radiowych.' }],
+    characters: [{ id: 'ewa', name: 'EWA', age: '29', role: 'Protagonistka · techniczka', goal: 'Ustalić źródło sygnału.', flaw: 'Woli pomiary od własnej intuicji.', voice: 'Precyzyjna, rzeczowa, używa terminów radiowych.', appearance: 'Okulary w cienkich oprawkach, robocza bluza, słuchawki przewieszone przez szyję.', backstory: 'Po studiach została na niewielkiej stacji radiowej. W pracy odnajduje porządek, którego brakuje jej poza nią.' }],
     scenes: [{ id: 'radio', title: 'Częstotliwość', heading: 'WN. STACJA RADIOWA — WIECZÓR', act: 1, status: 'draft', synopsis: 'Ewa odbiera wiadomość z przyszłości.', characterIds: ['ewa'], notes: '', blocks: blocks([
       ['action', 'Na monitorze pojawia się pojedynczy pik. EWA dostraja odbiornik. W szumie rozpoznaje własny głos.'],
       ['character', 'EWA'], ['dialogue', 'Kto nadaje na tej częstotliwości?'],

@@ -22,13 +22,22 @@ export interface Character {
   goal: string;
   flaw: string;
   voice: string;
+  appearance: string;
+  backstory: string;
+}
+export interface Act {
+  act_number: number;
+  title: string;
+  summary: string;
 }
 export interface Project {
   id: string;
   title: string;
   genre: string;
   logline: string;
-  acts: number[];
+  synopsis: string;
+  target_audience: string;
+  acts: Act[];
   scenes: Scene[];
   characters: Character[];
 }
@@ -44,6 +53,8 @@ export const statusLabels: Record<SceneStatus, string> = {
 export const newId = () => crypto.randomUUID();
 
 export const screenplayModel = 'Bielik 11B';
+
+export const createAct = (act_number: number): Act => ({ act_number, title: '', summary: '' });
 
 export function formatAct(number: number): string {
   if (number > 3999) return String(number);

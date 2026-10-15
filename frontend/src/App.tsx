@@ -7,10 +7,11 @@ import { SceneEditor } from './components/SceneEditor';
 import { AssistantPanel } from './components/AssistantPanel';
 import { OutlineView } from './components/OutlineView';
 import { CharactersView } from './components/CharactersView';
+import { ProjectDialog } from './components/ProjectDialog';
 import { Modal } from './components/Modal';
 import { IconButton } from './components/IconButton';
 import { exportProject } from './services/export';
-import { newId, screenplayModel } from './types';
+import { createAct, newId, screenplayModel } from './types';
 import type { Project, Scene, View } from './types';
 
 export default function App() {
@@ -22,10 +23,9 @@ export default function App() {
   const [view, setView] = useState<View>('script');
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 1000);
   const [assistantOpen, setAssistantOpen] = useState(() => window.innerWidth > 760);
-  const [modal, setModal] = useState<'settings' | 'export' | 'project' | 'deleteScene'>();
+  const [modal, setModal] = useState<'settings' | 'export' | 'project' | 'editProject' | 'deleteScene'>();
   const [zoom, setZoom] = useState(100);
   const [exportFormat, setExportFormat] = useState<'fountain' | 'json'>('fountain');
-  const [projectDraft, setProjectDraft] = useState({ title: '', genre: '', logline: '' });
   const [notice, setNotice] = useState('');
   const [warningVisible, setWarningVisible] = useState(true);
   const updateProject = (next: Project) => workspace.updateProject(project.id, () => next);
@@ -36,7 +36,7 @@ export default function App() {
   function switchProject(id: string) { setProjectId(id); setSceneId(workspace.projects.find(item => item.id === id)?.scenes[0]?.id); setView('script'); }
   function addAct() {
     workspace.updateProject(project.id, current => ({
-      ...current, acts: [...current.acts, Math.max(0, ...current.acts) + 1],
+      ...current, acts: [...current.acts, createAct(Math.max(0, ...current.acts.map(act => act.act_number)) + 1)],
     }));
   }
   function addScene(act: Scene['act']) {
@@ -52,7 +52,7 @@ export default function App() {
   const words = project.scenes.flatMap(item => item.blocks).map(block => block.text).join(' ').trim().split(/\s+/).filter(Boolean).length;
   const tabs = [{ id: 'script', label: 'Scenariusz', icon: FileText }, { id: 'outline', label: 'Struktura', icon: LayoutList }, { id: 'characters', label: 'Postacie', icon: UsersRound }] as const;
   return <div className={`app ${sidebarOpen ? 'has-sidebar' : ''} ${assistantOpen ? 'has-assistant' : ''}`}>
-    <TopBar projects={workspace.projects} project={project} onProject={switchProject} onNewProject={() => { setProjectDraft({ title: '', genre: '', logline: '' }); setModal('project'); }} onSettings={() => setModal('settings')} onExport={() => setModal('export')} onSidebar={() => { setSidebarOpen(value => !value); if (window.innerWidth <= 760) setAssistantOpen(false); }} onAssistant={() => { setAssistantOpen(value => !value); if (window.innerWidth <= 1000) setSidebarOpen(false); }} sidebarOpen={sidebarOpen} assistantOpen={assistantOpen} />
+    <TopBar projects={workspace.projects} project={project} onProject={switchProject} onNewProject={() => setModal('project')} onEditProject={() => setModal('editProject')} onSettings={() => setModal('settings')} onExport={() => setModal('export')} onSidebar={() => { setSidebarOpen(value => !value); if (window.innerWidth <= 760) setAssistantOpen(false); }} onAssistant={() => { setAssistantOpen(value => !value); if (window.innerWidth <= 1000) setSidebarOpen(false); }} sidebarOpen={sidebarOpen} assistantOpen={assistantOpen} />
     <div className="app-body">
       {sidebarOpen && <><button className="sidebar-backdrop" aria-label="Zamknij listę scen" onClick={() => setSidebarOpen(false)} /><SceneSidebar key={project.id} project={project} sceneId={scene?.id} onSelect={selectScene} onClose={() => setSidebarOpen(false)} /></>}
       <main className="main-workspace">
@@ -82,7 +82,19 @@ export default function App() {
       <div className="modal-actions"><button className="button primary" onClick={() => setModal(undefined)}>Gotowe</button></div>
     </Modal>}
     {modal === 'export' && <Modal title="Eksport scenariusza" onClose={() => setModal(undefined)}><div className="modal-body"><p className="export-project-name">{project.title}</p><p className="muted small">{project.scenes.length} scen · {words} słów</p><label className="field-label spaced" htmlFor="export-format">Format pliku</label><select id="export-format" className="field-input" value={exportFormat} onChange={event => setExportFormat(event.target.value as 'fountain' | 'json')}><option value="fountain">Fountain (.fountain)</option><option value="json">Projekt z kartami postaci (.json)</option></select></div><div className="modal-actions"><button className="button" onClick={() => setModal(undefined)}>Anuluj</button><button className="button primary" onClick={() => { exportProject(project, exportFormat); setModal(undefined); setNotice('Plik przygotowany do pobrania.'); }}>Pobierz plik</button></div></Modal>}
-    {modal === 'project' && <Modal title="Nowy projekt" onClose={() => setModal(undefined)}><form onSubmit={event => { event.preventDefault(); if (!projectDraft.title.trim()) return; const next: Project = { id: newId(), ...projectDraft, title: projectDraft.title.trim(), acts: [1, 2, 3], scenes: [], characters: [] }; workspace.addProject(next); setProjectId(next.id); setSceneId(undefined); setView('outline'); setModal(undefined); }}><div className="modal-body"><label className="field-label" htmlFor="project-title">Tytuł</label><input id="project-title" className="field-input" required maxLength={120} value={projectDraft.title} onChange={event => setProjectDraft({ ...projectDraft, title: event.target.value })} /><label className="field-label spaced" htmlFor="project-genre">Gatunek</label><input id="project-genre" className="field-input" value={projectDraft.genre} onChange={event => setProjectDraft({ ...projectDraft, genre: event.target.value })} /><label className="field-label spaced" htmlFor="project-logline">Logline</label><textarea id="project-logline" className="field-textarea" rows={3} value={projectDraft.logline} onChange={event => setProjectDraft({ ...projectDraft, logline: event.target.value })} /></div><div className="modal-actions"><button type="button" className="button" onClick={() => setModal(undefined)}>Anuluj</button><button type="submit" className="button primary">Utwórz projekt</button></div></form></Modal>}
+    {(modal === 'project' || modal === 'editProject') && <ProjectDialog
+      key={modal === 'editProject' ? project.id : 'new-project'}
+      project={modal === 'editProject' ? project : undefined}
+      onClose={() => setModal(undefined)}
+      onSave={details => {
+        if (modal === 'editProject') workspace.updateProject(project.id, current => ({ ...current, ...details }));
+        else {
+          const next: Project = { id: newId(), ...details, acts: [1, 2, 3].map(createAct), scenes: [], characters: [] };
+          workspace.addProject(next); setProjectId(next.id); setSceneId(undefined); setView('outline');
+        }
+        setModal(undefined);
+      }}
+    />}
     {modal === 'deleteScene' && scene && <Modal title="Usuń scenę" onClose={() => setModal(undefined)}><div className="modal-body"><p>Usunąć scenę „{scene.title}”? Zmianę możesz cofnąć w edytorze.</p></div><div className="modal-actions"><button className="button" onClick={() => setModal(undefined)}>Anuluj</button><button className="button danger" onClick={() => { workspace.updateProject(project.id, current => ({ ...current, scenes: current.scenes.filter(item => item.id !== scene.id) })); setSceneId(undefined); setModal(undefined); }}>Usuń scenę</button></div></Modal>}
   </div>;
 }

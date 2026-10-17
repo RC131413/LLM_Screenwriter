@@ -3,6 +3,7 @@ import { Check, ChevronRight, Clapperboard, FileText, LayoutList, Minus, Plus, R
 import { useWorkspace } from './hooks/useWorkspace';
 import { useProjectNavigation } from './hooks/useProjectNavigation';
 import { usePreferences } from './hooks/usePreferences';
+import { useProfile } from './hooks/useProfile';
 import { TopBar } from './components/TopBar';
 import { SceneSidebar } from './components/SceneSidebar';
 import { SceneEditor } from './components/SceneEditor';
@@ -12,17 +13,19 @@ import { CharactersView } from './components/CharactersView';
 import { ProjectDialog } from './components/ProjectDialog';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { PreferencesDialog } from './components/PreferencesDialog';
+import { SettingsPage } from './components/SettingsPage';
 import { Modal } from './components/Modal';
 import { IconButton } from './components/IconButton';
 import { exportProject } from './services/export';
 import { isInTrash, projectsInCollection } from './services/projectLibrary';
 import { createAct, newId, screenplayModel } from './types';
-import type { DashboardCollection, Project, Scene, View } from './types';
+import type { DashboardCollection, Project, Scene, UserPreferences, View } from './types';
 
 export default function App() {
   const workspace = useWorkspace();
   const navigation = useProjectNavigation();
   const preferences = usePreferences();
+  const account = useProfile();
   const project = workspace.projects.find(item => item.id === navigation.projectId && !isInTrash(item));
   const [dashboardCollection, setDashboardCollection] = useState<DashboardCollection>('all');
   const [sceneId, setSceneId] = useState<string>();
@@ -56,6 +59,11 @@ export default function App() {
   function restoreProject(id: string) {
     workspace.updateProject(id, current => ({ ...current, metadata: { ...current.metadata, deleted_at: null } }));
   }
+  function savePreferences(next: UserPreferences) {
+    const saved = preferences.savePreferences(next);
+    if (saved) setNotice('Preferencje zapisane.');
+    return saved;
+  }
   function addAct() {
     if (!project) return;
     workspace.updateProject(project.id, current => ({
@@ -73,14 +81,14 @@ export default function App() {
     selectScene(next.id);
   }
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 3500); return () => clearTimeout(timer); }, [notice]);
-  useEffect(() => { setModal(undefined); setDeletingProjectId(undefined); }, [navigation.projectId]);
+  useEffect(() => { setModal(undefined); setDeletingProjectId(undefined); }, [navigation.projectId, navigation.settingsTab]);
   const openedProjectId = project?.id;
   useEffect(() => { if (openedProjectId) workspace.markProjectOpened(openedProjectId); }, [openedProjectId, workspace.markProjectOpened]);
   const words = project ? project.scenes.flatMap(item => item.blocks).map(block => block.text).join(' ').trim().split(/\s+/).filter(Boolean).length : 0;
   const tabs = [{ id: 'script', label: 'Scenariusz', icon: FileText }, { id: 'outline', label: 'Struktura', icon: LayoutList }, { id: 'characters', label: 'Postacie', icon: UsersRound }] as const;
   return <div className={`app ${sidebarOpen ? 'has-sidebar' : ''} ${assistantOpen ? 'has-assistant' : ''}`}>
-    {project ? <>
-    <TopBar projects={workspace.projects.filter(item => !isInTrash(item))} project={project} onProject={switchProject} onNewProject={() => setModal('project')} onEditProject={() => editProject(project.id)} onSettings={() => setModal('settings')} onExport={() => setModal('export')} onSidebar={() => { setSidebarOpen(value => !value); if (window.innerWidth <= 760) setAssistantOpen(false); }} onAssistant={() => { setAssistantOpen(value => !value); if (window.innerWidth <= 1000) setSidebarOpen(false); }} sidebarOpen={sidebarOpen} assistantOpen={assistantOpen} />
+    {navigation.settingsTab ? <SettingsPage tab={navigation.settingsTab} onTab={navigation.openSettings} returnHref={navigation.returnHref} profile={account.profile} onProfileSave={account.saveProfile} preferences={preferences.preferences} onPreferencesSave={savePreferences} projects={workspace.projects} /> : project ? <>
+    <TopBar profile={account.profile} onAccountSettings={() => navigation.openSettings()} projects={workspace.projects.filter(item => !isInTrash(item))} project={project} onProject={switchProject} onNewProject={() => setModal('project')} onEditProject={() => editProject(project.id)} onSettings={() => setModal('settings')} onExport={() => setModal('export')} onSidebar={() => { setSidebarOpen(value => !value); if (window.innerWidth <= 760) setAssistantOpen(false); }} onAssistant={() => { setAssistantOpen(value => !value); if (window.innerWidth <= 1000) setSidebarOpen(false); }} sidebarOpen={sidebarOpen} assistantOpen={assistantOpen} />
     <div className="app-body">
       {sidebarOpen && <><button className="sidebar-backdrop" aria-label="Zamknij listę scen" onClick={() => setSidebarOpen(false)} /><SceneSidebar key={project.id} project={project} sceneId={scene?.id} onSelect={selectScene} onClose={() => setSidebarOpen(false)} /></>}
       <main className="main-workspace">
@@ -91,15 +99,11 @@ export default function App() {
       </main>
       {assistantOpen && <AssistantPanel project={project} scene={scene} onChange={updateScene} onClose={() => setAssistantOpen(false)} onApply={variant => { if (scene) { updateScene({ ...scene, blocks: variant.blocks, status: 'review' }); setNotice('Wariant zastosowany. Zmianę możesz cofnąć.'); } }} />}
     </div>
-    </> : <ProjectDashboard projects={workspace.projects} collection={dashboardCollection} onCollection={setDashboardCollection} onOpen={switchProject} onCreate={() => setModal('project')} onEdit={editProject} onDelete={setDeletingProjectId} onFavorite={toggleFavorite} onArchive={toggleArchive} onRestore={restoreProject} onSettings={() => setModal('preferences')} undo={() => { workspace.undo(); setNotice(''); }} redo={() => { workspace.redo(); setNotice(''); }} canUndo={workspace.canUndo} canRedo={workspace.canRedo} />}
+    </> : <ProjectDashboard profile={account.profile} onAccountSettings={() => navigation.openSettings()} projects={workspace.projects} collection={dashboardCollection} onCollection={setDashboardCollection} onOpen={switchProject} onCreate={() => setModal('project')} onEdit={editProject} onDelete={setDeletingProjectId} onFavorite={toggleFavorite} onArchive={toggleArchive} onRestore={restoreProject} onSettings={() => setModal('preferences')} undo={() => { workspace.undo(); setNotice(''); }} redo={() => { workspace.redo(); setNotice(''); }} canUndo={workspace.canUndo} canRedo={workspace.canRedo} />}
     <footer className="statusbar"><div className={`save-status ${workspace.saveState}`}><span className="status-dot" /><span>{workspace.saveState === 'saved' ? 'Zapisano lokalnie' : workspace.saveState === 'saving' ? 'Zapisywanie…' : 'Błąd zapisu — wyeksportuj projekt'}</span></div>{project ? <><div className="statusbar-center"><span>{project.title}</span><ChevronRight size={11} /><span>{scene?.title ?? 'Brak scen'}</span></div><div className="document-stats"><span>{words} słów</span><span>{project.scenes.length} scen</span><span className="format-label">Fountain</span></div></> : <span>Liczba projektów: {projectsInCollection(workspace.projects, dashboardCollection).length}</span>}</footer>
     {warningVisible && workspace.warning && <div className="warning-banner" role="alert"><span>{workspace.warning}</span><button onClick={() => setWarningVisible(false)}>Zamknij</button></div>}
     {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
-    {modal === 'preferences' && <PreferencesDialog preferences={preferences.preferences} onClose={() => setModal(undefined)} onSave={next => {
-      const saved = preferences.savePreferences(next);
-      if (saved) setNotice('Preferencje zapisane.');
-      return saved;
-    }} />}
+    {modal === 'preferences' && <PreferencesDialog preferences={preferences.preferences} onClose={() => setModal(undefined)} onSave={savePreferences} />}
     {modal === 'settings' && <Modal title="Ustawienia edytora" onClose={() => setModal(undefined)}>
       <div className="modal-body">
         <div className="settings-row"><span>Model w symulacji</span><span className="muted">{screenplayModel}</span></div>

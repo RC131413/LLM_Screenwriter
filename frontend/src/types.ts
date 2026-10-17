@@ -50,6 +50,14 @@ export interface Project {
   metadata?: ProjectMetadata;
 }
 export type DashboardCollection = 'all' | 'recent' | 'favorites' | 'archive' | 'trash';
+export type SettingsTab = 'account' | 'ai' | 'statistics';
+
+export interface UserProfile {
+  display_name: string;
+  email: string;
+  avatar_url: string | null;
+  preferred_language: 'pl';
+}
 
 export interface UserPreferences {
   writing_style_preferences: {

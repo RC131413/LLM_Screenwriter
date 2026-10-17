@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { FileText, FolderOpen, PanelLeft, Plus, Redo2, Search, Undo2, X } from 'lucide-react';
-import type { DashboardCollection, Project } from '../types';
+import type { DashboardCollection, Project, UserProfile } from '../types';
 import { IconButton } from './IconButton';
 import { DashboardSidebar } from './DashboardSidebar';
 import { ProjectCard } from './ProjectCard';
 import { collectionLabels, projectsInCollection } from '../services/projectLibrary';
+import { UserMenu } from './UserMenu';
 
 interface Props {
   projects: Project[];
@@ -16,6 +17,8 @@ interface Props {
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
   onSettings: () => void;
+  profile: UserProfile;
+  onAccountSettings: () => void;
   collection: DashboardCollection;
   onCollection: (collection: DashboardCollection) => void;
   undo: () => void;
@@ -24,7 +27,7 @@ interface Props {
   canRedo: boolean;
 }
 
-export function ProjectDashboard({ projects, onOpen, onCreate, onEdit, onDelete, onFavorite, onArchive, onRestore, onSettings, collection, onCollection, undo, redo, canUndo, canRedo }: Props) {
+export function ProjectDashboard({ projects, onOpen, onCreate, onEdit, onDelete, onFavorite, onArchive, onRestore, onSettings, profile, onAccountSettings, collection, onCollection, undo, redo, canUndo, canRedo }: Props) {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'added' | 'title'>('added');
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 1000);
@@ -44,6 +47,7 @@ export function ProjectDashboard({ projects, onOpen, onCreate, onEdit, onDelete,
         <span className="demo-badge"><span className="status-dot" />Tryb demonstracyjny</span>
         <IconButton label="Menu projektów" aria-expanded={sidebarOpen} aria-pressed={sidebarOpen} onClick={() => setSidebarOpen(value => !value)}><PanelLeft size={18} /></IconButton>
       </div>
+      <UserMenu profile={profile} onSettings={onAccountSettings} />
     </header>
     <div className="dashboard-shell">
       {sidebarOpen && <><button className="dashboard-menu-backdrop" aria-label="Zamknij menu projektów" onClick={() => setSidebarOpen(false)} /><DashboardSidebar projects={projects} collection={collection} onCollection={next => { onCollection(next); setQuery(''); if (window.innerWidth <= 1000) setSidebarOpen(false); }} onOpen={onOpen} onClose={() => setSidebarOpen(false)} onSettings={() => { if (window.innerWidth <= 1000) setSidebarOpen(false); onSettings(); }} /></>}

@@ -1,23 +1,35 @@
 import { useEffect, useState } from 'react';
+import type { SettingsTab } from '../types';
 
 export const projectHref = (id: string) => `#project/${encodeURIComponent(id)}`;
 
-function readProjectId(): string | undefined {
-  if (!window.location.hash.startsWith('#project/')) return undefined;
-  try { return decodeURIComponent(window.location.hash.slice('#project/'.length)) || undefined; }
-  catch { return undefined; }
+function readLocation(): { projectId?: string; settingsTab?: SettingsTab } {
+  const hash = window.location.hash;
+  if (hash === '#settings' || hash.startsWith('#settings/')) {
+    const tab = hash.slice('#settings/'.length);
+    return { settingsTab: tab === 'ai' || tab === 'statistics' ? tab : 'account' };
+  }
+  if (!hash.startsWith('#project/')) return {};
+  try { return { projectId: decodeURIComponent(hash.slice('#project/'.length)) || undefined }; }
+  catch { return {}; }
 }
 
 export function useProjectNavigation() {
-  const [projectId, setProjectId] = useState(readProjectId);
+  const [location, setLocation] = useState(readLocation);
+  const [returnHref, setReturnHref] = useState('#projects');
   useEffect(() => {
-    const sync = () => setProjectId(readProjectId());
+    const sync = () => setLocation(readLocation());
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
   return {
-    projectId,
+    ...location,
+    returnHref,
+    openSettings: (tab: SettingsTab = 'account') => {
+      if (!location.settingsTab) setReturnHref(location.projectId ? projectHref(location.projectId) : '#projects');
+      window.location.hash = `#settings/${tab}`;
+    },
     openProject: (id: string) => { window.location.hash = projectHref(id); },
     openDashboard: () => { window.location.hash = '#projects'; },
   };

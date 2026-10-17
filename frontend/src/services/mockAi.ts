@@ -53,6 +53,14 @@ export function checkScene(scene: Scene, characters: Character[]): string[] {
   if (!/^(WN\.|PL\.|INT\.|EXT\.)/.test(scene.heading)) findings.push('Nagłówek powinien zaczynać się od WN., PL., INT. lub EXT.');
   if (!scene.synopsis.trim()) findings.push('Uzupełnij cel sceny w opisie.');
   if (!scene.characterIds.length) findings.push('Scena nie ma przypisanych postaci.');
+  const sceneText = scene.blocks.map(block => block.text).join('\n').normalize('NFKC').toLocaleUpperCase('pl').replace(/\s+/g, ' ');
+  for (const character of characters.filter(item => scene.characterIds.includes(item.id))) {
+    const name = character.name.normalize('NFKC').trim().toLocaleUpperCase('pl').replace(/\s+/g, ' ');
+    if (!name) continue;
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const mention = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapedName}(?=$|[^\\p{L}\\p{N}_])`, 'u');
+    if (!mention.test(sceneText)) findings.push(`Postać ${character.name} jest zaznaczona, ale nie występuje w tekście sceny.`);
+  }
   let speaker = '';
   for (const block of scene.blocks) {
     if (!block.text.trim()) findings.push('W scenie znajduje się pusty element.');

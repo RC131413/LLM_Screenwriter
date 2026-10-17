@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, Plus, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { TextareaHTMLAttributes } from 'react';
 import { blockLabels, formatAct, newId, statusLabels } from '../types';
 import type { BlockType, Scene, ScriptBlock } from '../types';
@@ -55,7 +55,7 @@ export function SceneEditor({ scene, sceneNumber, zoom, onChange, onDelete, undo
       <div className="toolbar-end"><select aria-label="Status sceny" value={scene.status} onChange={event => onChange({ ...scene, status: event.target.value as Scene['status'] })}>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><IconButton label="Usuń scenę" onClick={onDelete}><Trash2 size={16} /></IconButton></div>
     </div>
     <div className="document-scroll">
-      <div className="document-caption"><span>SCENA {String(sceneNumber).padStart(2, '0')}</span><input aria-label="Tytuł sceny" value={scene.title} onChange={event => onChange({ ...scene, title: event.target.value })} /></div>
+      <div className="document-caption"><span>SCENA {String(sceneNumber).padStart(2, '0')}</span><div className="scene-title-field"><input aria-label="Tytuł sceny" title="Edytuj tytuł sceny" value={scene.title} onChange={event => onChange({ ...scene, title: event.target.value })} /><Pencil size={14} aria-hidden="true" /></div></div>
       <div className="document-sheet" style={{ zoom: zoom / 100 }}>
       <article className="script-page" aria-label="Edytor scenariusza">
         <div className="page-number">{sceneNumber}.</div>

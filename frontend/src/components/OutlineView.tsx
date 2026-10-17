@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpRight, Pencil, Plus, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowRightLeft, ArrowUp, ArrowUpRight, Pencil, Plus, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { Act, Project, Scene } from '../types';
 import { formatAct, statusLabels } from '../types';
 import { IconButton } from './IconButton';
@@ -20,6 +20,9 @@ interface Props {
 export function OutlineView({ project, onSelect, onAdd, onAddAct, onChange, undo, redo, canUndo, canRedo }: Props) {
   const [deletingAct, setDeletingAct] = useState<number>();
   const [editingAct, setEditingAct] = useState<Act>();
+  const [movingSceneId, setMovingSceneId] = useState<string>();
+  const [targetAct, setTargetAct] = useState(0);
+  const movingScene = project.scenes.find(scene => scene.id === movingSceneId);
   function removeAct(act: number) {
     onChange({
       ...project,
@@ -82,6 +85,9 @@ export function OutlineView({ project, onSelect, onAdd, onAddAct, onChange, undo
           <p>{scene.synopsis || 'Brak opisu sceny.'}</p>
           <div className="outline-scene-footer">
             <span className={`status-label ${scene.status}`}>{statusLabels[scene.status]}</span>
+            <IconButton label={`Przenieś scenę ${scene.title} do innego aktu`} disabled={project.acts.length < 2} onClick={() => {
+              setMovingSceneId(scene.id); setTargetAct(project.acts.find(act => act.act_number !== scene.act)?.act_number ?? 0);
+            }}><ArrowRightLeft size={14} /></IconButton>
             <IconButton label={`Przesuń scenę ${scene.title} w górę`} disabled={index === 0} onClick={() => move(scene, -1)}><ArrowUp size={14} /></IconButton>
             <IconButton label={`Przesuń scenę ${scene.title} w dół`} disabled={index === scenes.length - 1} onClick={() => move(scene, 1)}><ArrowDown size={14} /></IconButton>
           </div>
@@ -89,6 +95,22 @@ export function OutlineView({ project, onSelect, onAdd, onAddAct, onChange, undo
         {scenes.length === 0 && <p className="empty-search">Brak scen w tym akcie.</p>}
       </section>;
     })}</div>
+    {movingScene && <Modal title="Przenieś scenę" onClose={() => setMovingSceneId(undefined)}>
+      <form onSubmit={event => {
+        event.preventDefault();
+        if (targetAct === movingScene.act || !project.acts.some(act => act.act_number === targetAct)) return;
+        const scenes = project.scenes.filter(scene => scene.id !== movingScene.id);
+        const insertAfter = scenes.findLastIndex(scene => scene.act <= targetAct);
+        scenes.splice(insertAfter + 1, 0, { ...movingScene, act: targetAct });
+        onChange({ ...project, scenes }); setMovingSceneId(undefined);
+      }}>
+        <div className="modal-body"><p className="move-scene-name">{movingScene.title || 'Bez tytułu'}</p><p className="muted small">Akt {formatAct(movingScene.act)}</p>
+          <label className="field-label spaced" htmlFor="move-target-act">Docelowy akt</label>
+          <select id="move-target-act" className="field-input" value={targetAct} onChange={event => setTargetAct(Number(event.target.value))}>{project.acts.filter(act => act.act_number !== movingScene.act).map(act => <option key={act.act_number} value={act.act_number}>Akt {formatAct(act.act_number)}{act.title && ` · ${act.title}`}</option>)}</select>
+        </div>
+        <div className="modal-actions"><button type="button" className="button" onClick={() => setMovingSceneId(undefined)}>Anuluj</button><button type="submit" className="button primary" disabled={!project.acts.some(act => act.act_number === targetAct) || targetAct === movingScene.act}><ArrowRightLeft size={15} />Przenieś scenę</button></div>
+      </form>
+    </Modal>}
     {editingAct && <Modal title={`Edytuj akt ${formatAct(editingAct.act_number)}`} onClose={() => setEditingAct(undefined)}>
       <form onSubmit={event => {
         event.preventDefault();

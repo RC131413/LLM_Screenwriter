@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, LogIn, UserPlus } from 'lucide-react';
+import { LogIn, UserPlus } from 'lucide-react';
 import type { AuthView } from '../types';
 import { PasswordField } from './PasswordField';
 
@@ -13,7 +13,7 @@ export function AuthPage({ mode, onSubmit }: { mode: AuthView; onSubmit: () => v
   const [passwordError, setPasswordError] = useState('');
   const [repeatError, setRepeatError] = useState('');
   return <div className="auth-page">
-    <header className="auth-header"><a href="#login" className="brand"><FileText size={21} strokeWidth={1.6} /><span>LLM <strong>Screenwriter</strong></span></a><span className="auth-demo-badge"><span className="status-dot" />Tryb demonstracyjny</span></header>
+    <header className="auth-header"><a href="#login" className="brand"><strong>AgentDraft</strong></a></header>
     <main className="auth-main">
       <section className="auth-content" aria-labelledby="auth-heading">
         <div className="auth-heading"><span className="eyebrow">{registering ? 'NOWE KONTO' : 'TWOJA PRZESTRZEŃ ROBOCZA'}</span><h1 id="auth-heading">{registering ? 'Zarejestruj się' : 'Zaloguj się'}</h1></div>

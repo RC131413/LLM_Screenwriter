@@ -80,6 +80,6 @@ export function AccountSettings({ profile, onSave }: Props) {
         <div className="settings-form-actions"><button type="submit" className="button">Zmień hasło</button></div>
       </form>}
     </section>
-    <section className="settings-section account-session"><h2>Sesja</h2><button type="button" className="button danger"><LogOut size={15} />Wyloguj</button></section>
+    <section className="settings-section account-session"><h2>Sesja</h2><button type="button" className="button danger" onClick={() => { window.location.hash = '#login'; }}><LogOut size={15} />Wyloguj</button></section>
   </div>;
 }

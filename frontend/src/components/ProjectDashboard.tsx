@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, FolderOpen, PanelLeft, Plus, Redo2, Search, Undo2, X } from 'lucide-react';
+import { FolderOpen, PanelLeft, Plus, Redo2, Search, Undo2, X } from 'lucide-react';
 import type { DashboardCollection, Project, UserProfile } from '../types';
 import { IconButton } from './IconButton';
 import { DashboardSidebar } from './DashboardSidebar';
@@ -41,10 +41,9 @@ export function ProjectDashboard({ projects, onOpen, onCreate, onEdit, onDelete,
 
   return <>
     <header className="topbar dashboard-topbar">
-      <div className="brand"><FileText size={21} strokeWidth={1.6} /><span>LLM <strong>Screenwriter</strong></span></div>
+      <div className="brand"><strong>AgentDraft</strong></div>
       <span className="dashboard-location">{collectionLabels[collection]}</span>
       <div className="topbar-actions">
-        <span className="demo-badge"><span className="status-dot" />Tryb demonstracyjny</span>
         <IconButton label="Menu projektów" aria-expanded={sidebarOpen} aria-pressed={sidebarOpen} onClick={() => setSidebarOpen(value => !value)}><PanelLeft size={18} /></IconButton>
       </div>
       <UserMenu profile={profile} onSettings={onAccountSettings} />

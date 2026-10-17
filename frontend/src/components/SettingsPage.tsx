@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ChartNoAxesColumn, FileText, SlidersHorizontal, UserRound } from 'lucide-react';
+import { ArrowLeft, ChartNoAxesColumn, SlidersHorizontal, UserRound } from 'lucide-react';
 import type { Project, SettingsTab, UserPreferences, UserProfile } from '../types';
 import { UserMenu } from './UserMenu';
 import { AccountSettings } from './AccountSettings';
@@ -26,7 +26,7 @@ export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, p
   ] as const;
   return <>
     <header className="topbar settings-topbar">
-      <div className="brand"><FileText size={21} strokeWidth={1.6} /><span>LLM <strong>Screenwriter</strong></span></div>
+      <div className="brand"><strong>AgentDraft</strong></div>
       <span className="dashboard-location">Ustawienia</span>
       <div className="topbar-actions"><a className="editor-back-link" href={returnHref}><ArrowLeft size={15} /><span>{returnHref.startsWith('#project/') ? 'Wróć do edytora' : 'Wróć do projektów'}</span></a></div>
       <UserMenu profile={profile} onSettings={() => onTab('account')} />

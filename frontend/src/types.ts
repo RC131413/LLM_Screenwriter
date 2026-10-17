@@ -30,6 +30,13 @@ export interface Act {
   title: string;
   summary: string;
 }
+export interface ProjectMetadata {
+  [key: string]: unknown;
+  is_favorite?: boolean;
+  archived_at?: string | null;
+  deleted_at?: string | null;
+  last_opened_at?: string | null;
+}
 export interface Project {
   id: string;
   title: string;
@@ -40,6 +47,21 @@ export interface Project {
   acts: Act[];
   scenes: Scene[];
   characters: Character[];
+  metadata?: ProjectMetadata;
+}
+export type DashboardCollection = 'all' | 'recent' | 'favorites' | 'archive' | 'trash';
+
+export interface UserPreferences {
+  writing_style_preferences: {
+    stage_directions_style: 'concise_technical' | 'literary_descriptive';
+    dialogue_tone: string;
+    parentheticals: 'sparingly' | 'ignore';
+  };
+  llm_preferences: {
+    model_name: 'Bielik 11B (Lokalny)';
+    temperature: number;
+    max_tokens: number;
+  };
 }
 export interface SceneVariant { id: string; title: string; description: string; blocks: ScriptBlock[] }
 

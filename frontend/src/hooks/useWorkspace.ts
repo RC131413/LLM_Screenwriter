@@ -5,7 +5,8 @@ import type { Act, Character, Project } from '../types';
 
 const storageKey = 'llm-screenwriter.workspace.v1';
 type History = { projects: Project[]; past: Project[][]; future: Project[][] };
-type Action = { type: 'change'; update: (projects: Project[]) => Project[] } | { type: 'undo' } | { type: 'redo' };
+type Action = { type: 'change'; update: (projects: Project[]) => Project[] } | { type: 'undo' } | { type: 'redo' } |
+  { type: 'opened'; id: string; timestamp: string };
 
 type StoredCharacter = Omit<Character, 'appearance' | 'backstory'> & Partial<Pick<Character, 'appearance' | 'backstory'>>;
 type StoredProject = Omit<Project, 'acts' | 'characters' | 'synopsis' | 'target_audience'> &
@@ -33,6 +34,9 @@ function isProject(value: unknown): value is StoredProject {
   return ['id', 'title', 'genre', 'logline'].every(key => typeof item[key as keyof Project] === 'string') &&
     (item.synopsis === undefined || typeof item.synopsis === 'string') &&
     (item.target_audience === undefined || typeof item.target_audience === 'string') &&
+    (item.metadata === undefined || (item.metadata !== null && typeof item.metadata === 'object' && !Array.isArray(item.metadata) &&
+      (item.metadata.is_favorite === undefined || typeof item.metadata.is_favorite === 'boolean') &&
+      ['archived_at', 'deleted_at', 'last_opened_at'].every(key => item.metadata?.[key] == null || typeof item.metadata[key] === 'string'))) &&
     (item.acts === undefined || (Array.isArray(item.acts) && item.acts.every(isStoredAct) && new Set(item.acts.map(storedActNumber)).size === item.acts.length)) &&
     Array.isArray(item.scenes) && item.scenes.every(scene => scene &&
       ['id', 'title', 'heading', 'synopsis', 'notes'].every(key => typeof scene[key as keyof typeof scene] === 'string') &&
@@ -51,7 +55,7 @@ function loadWorkspace(): { projects: Project[]; warning: string } {
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       const parsed: unknown = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(isProject)) {
+      if (Array.isArray(parsed) && parsed.every(isProject)) {
         return {
           projects: parsed.map(project => ({
             ...project,
@@ -76,6 +80,12 @@ function loadWorkspace(): { projects: Project[]; warning: string } {
 }
 
 function reducer(state: History, action: Action): History {
+  if (action.type === 'opened') {
+    const touch = (projects: Project[]) => projects.map(project => project.id === action.id
+      ? { ...project, metadata: { ...project.metadata, last_opened_at: action.timestamp } } : project);
+    // Opening a document updates recents without consuming an editing undo step.
+    return { projects: touch(state.projects), past: state.past.map(touch), future: state.future.map(touch) };
+  }
   if (action.type === 'undo') {
     const previous = state.past.at(-1);
     return previous ? { projects: previous, past: state.past.slice(0, -1), future: [state.projects, ...state.future] } : state;
@@ -108,9 +118,13 @@ export function useWorkspace() {
   const updateProject = useCallback((id: string, update: (project: Project) => Project) => {
     dispatch({ type: 'change', update: projects => projects.map(project => project.id === id ? update(project) : project) });
   }, []);
+  const markProjectOpened = useCallback((id: string) => {
+    dispatch({ type: 'opened', id, timestamp: new Date().toISOString() });
+  }, []);
   return {
-    projects: state.projects, saveState, warning: initial.warning, updateProject,
+    projects: state.projects, saveState, warning: initial.warning, updateProject, markProjectOpened,
     addProject: (project: Project) => dispatch({ type: 'change', update: projects => [...projects, project] }),
+    removeProject: (id: string) => dispatch({ type: 'change', update: projects => projects.filter(project => project.id !== id) }),
     undo: () => dispatch({ type: 'undo' }), redo: () => dispatch({ type: 'redo' }),
     canUndo: state.past.length > 0, canRedo: state.future.length > 0,
   };

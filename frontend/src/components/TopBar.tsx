@@ -1,4 +1,4 @@
-import { Download, FileText, PanelLeft, PanelRight, Pencil, Plus, Settings2 } from 'lucide-react';
+import { ArrowLeft, Download, FileText, PanelLeft, PanelRight, Pencil, Plus, Settings2 } from 'lucide-react';
 import type { Project } from '../types';
 import { IconButton } from './IconButton';
 
@@ -8,7 +8,7 @@ interface Props {
   onSidebar: () => void; onAssistant: () => void; sidebarOpen: boolean; assistantOpen: boolean;
 }
 export function TopBar(props: Props) {
-  return <header className="topbar">
+  return <header className="topbar editor-topbar">
     <div className="brand"><FileText size={21} strokeWidth={1.6} /><span>LLM <strong>Screenwriter</strong></span></div>
     <div className="project-switcher">
       <span className="topbar-divider" />
@@ -19,6 +19,7 @@ export function TopBar(props: Props) {
       <IconButton label="Nowy projekt" onClick={props.onNewProject}><Plus size={16} /></IconButton>
     </div>
     <div className="topbar-actions">
+      <a className="editor-back-link" href="#projects" aria-label="Wróć do projektów"><ArrowLeft size={15} /><span>Projekty</span></a>
       <span className="demo-badge"><span className="status-dot" />Tryb demonstracyjny</span>
       <IconButton label="Lista scen" onClick={props.onSidebar} aria-pressed={props.sidebarOpen}><PanelLeft size={18} /></IconButton>
       <IconButton label="Panel asystenta" onClick={props.onAssistant} aria-pressed={props.assistantOpen}><PanelRight size={18} /></IconButton>

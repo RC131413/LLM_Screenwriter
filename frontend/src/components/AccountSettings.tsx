@@ -1,19 +1,12 @@
 import { useRef, useState } from 'react';
-import { Camera, Check, Eye, EyeOff, KeyRound, LogOut, Trash2 } from 'lucide-react';
+import { Camera, Check, KeyRound, LogOut, Trash2 } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { UserAvatar } from './UserMenu';
-import { IconButton } from './IconButton';
+import { PasswordField } from './PasswordField';
 
 interface Props {
   profile: UserProfile;
   onSave: (profile: Pick<UserProfile, 'display_name' | 'avatar_url'>) => boolean;
-}
-
-function PasswordField({ label, name, value, onChange, autoComplete }: {
-  label: string; name: string; value: string; onChange: (value: string) => void; autoComplete: string;
-}) {
-  const [visible, setVisible] = useState(false);
-  return <div><label className="field-label" htmlFor={name}>{label}</label><div className="password-input"><input id={name} name={name} className="field-input" type={visible ? 'text' : 'password'} autoComplete={autoComplete} required value={value} onChange={event => onChange(event.target.value)} /><IconButton label={`${visible ? 'Ukryj' : 'Pokaż'}: ${label.toLocaleLowerCase('pl')}`} aria-pressed={visible} onClick={() => setVisible(value => !value)}>{visible ? <EyeOff size={16} /> : <Eye size={16} />}</IconButton></div></div>;
 }
 
 export function AccountSettings({ profile, onSave }: Props) {

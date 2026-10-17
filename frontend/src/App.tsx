@@ -14,6 +14,7 @@ import { ProjectDialog } from './components/ProjectDialog';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { PreferencesDialog } from './components/PreferencesDialog';
 import { SettingsPage } from './components/SettingsPage';
+import { AuthPage } from './components/AuthPage';
 import { Modal } from './components/Modal';
 import { IconButton } from './components/IconButton';
 import { exportProject } from './services/export';
@@ -81,11 +82,15 @@ export default function App() {
     selectScene(next.id);
   }
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 3500); return () => clearTimeout(timer); }, [notice]);
-  useEffect(() => { setModal(undefined); setDeletingProjectId(undefined); }, [navigation.projectId, navigation.settingsTab]);
+  useEffect(() => { setModal(undefined); setDeletingProjectId(undefined); }, [navigation.projectId, navigation.settingsTab, navigation.authView]);
   const openedProjectId = project?.id;
   useEffect(() => { if (openedProjectId) workspace.markProjectOpened(openedProjectId); }, [openedProjectId, workspace.markProjectOpened]);
   const words = project ? project.scenes.flatMap(item => item.blocks).map(block => block.text).join(' ').trim().split(/\s+/).filter(Boolean).length : 0;
   const tabs = [{ id: 'script', label: 'Scenariusz', icon: FileText }, { id: 'outline', label: 'Struktura', icon: LayoutList }, { id: 'characters', label: 'Postacie', icon: UsersRound }] as const;
+  if (navigation.authView) return <AuthPage key={navigation.authView} mode={navigation.authView} onSubmit={() => {
+    setNotice(navigation.authView === 'register' ? 'Otwarto tryb demonstracyjny. Konto nie zostało utworzone.' : 'Otwarto tryb demonstracyjny. Logowanie wymaga połączenia z serwerem.');
+    navigation.openDashboard();
+  }} />;
   return <div className={`app ${sidebarOpen ? 'has-sidebar' : ''} ${assistantOpen ? 'has-assistant' : ''}`}>
     {navigation.settingsTab ? <SettingsPage tab={navigation.settingsTab} onTab={navigation.openSettings} returnHref={navigation.returnHref} profile={account.profile} onProfileSave={account.saveProfile} preferences={preferences.preferences} onPreferencesSave={savePreferences} projects={workspace.projects} /> : project ? <>
     <TopBar profile={account.profile} onAccountSettings={() => navigation.openSettings()} projects={workspace.projects.filter(item => !isInTrash(item))} project={project} onProject={switchProject} onNewProject={() => setModal('project')} onEditProject={() => editProject(project.id)} onSettings={() => setModal('settings')} onExport={() => setModal('export')} onSidebar={() => { setSidebarOpen(value => !value); if (window.innerWidth <= 760) setAssistantOpen(false); }} onAssistant={() => { setAssistantOpen(value => !value); if (window.innerWidth <= 1000) setSidebarOpen(false); }} sidebarOpen={sidebarOpen} assistantOpen={assistantOpen} />

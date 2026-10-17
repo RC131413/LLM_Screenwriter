@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { SettingsTab } from '../types';
+import type { AuthView, SettingsTab } from '../types';
 
 export const projectHref = (id: string) => `#project/${encodeURIComponent(id)}`;
 
-function readLocation(): { projectId?: string; settingsTab?: SettingsTab } {
+function readLocation(): { projectId?: string; settingsTab?: SettingsTab; authView?: AuthView } {
   const hash = window.location.hash;
+  if (!hash || hash === '#login' || hash === '#register') return { authView: hash === '#register' ? 'register' : 'login' };
   if (hash === '#settings' || hash.startsWith('#settings/')) {
     const tab = hash.slice('#settings/'.length);
     return { settingsTab: tab === 'ai' || tab === 'statistics' ? tab : 'account' };

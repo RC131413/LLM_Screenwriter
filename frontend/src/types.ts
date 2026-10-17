@@ -51,6 +51,7 @@ export interface Project {
 }
 export type DashboardCollection = 'all' | 'recent' | 'favorites' | 'archive' | 'trash';
 export type SettingsTab = 'account' | 'ai' | 'statistics';
+export type AuthView = 'login' | 'register';
 
 export interface UserProfile {
   display_name: string;

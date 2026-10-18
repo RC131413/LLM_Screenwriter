@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, CheckCheck, ChevronRight, Play, Square, X } from 'lucide-react';
+import { Check, CheckCheck, ChevronRight, History, Play, Square, X } from 'lucide-react';
 import { agentRoles, checkScene, generateVariants } from '../services/mockAi';
 import type { Project, Scene, SceneVariant } from '../types';
 import { formatAct, screenplayModel } from '../types';
@@ -7,6 +7,8 @@ import { IconButton } from './IconButton';
 import { Modal } from './Modal';
 import { AgentProgress } from './AgentProgress';
 import { SceneContext } from './SceneContext';
+import { usePromptHistory } from '../hooks/usePromptHistory';
+import { PromptHistoryDialog } from './PromptHistoryDialog';
 
 interface Props { project: Project; scene: Scene | undefined; onSelect: (id: string) => void; onChange: (scene: Scene) => void; onApply: (variant: SceneVariant) => void; onClose: () => void }
 export function AssistantPanel({ project, scene, onSelect, onChange, onApply, onClose }: Props) {
@@ -20,17 +22,21 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onApply, on
   const [preview, setPreview] = useState<SceneVariant>();
   const [findings, setFindings] = useState<string[] | null>(null);
   const [error, setError] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const promptHistory = usePromptHistory(project.id, scene?.id);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
     controller.current?.abort(); setRunning(false); setAgent(-1); setVariants([]); setSelected(undefined); setPreview(undefined); setFindings(null); setError('');
     return () => controller.current?.abort();
   }, [project.id, scene, project.characters]);
   useEffect(() => { setFindings(null); }, [scene]);
+  useEffect(() => { setHistoryOpen(false); }, [project.id, scene?.id]);
   const chosen = variants.find(variant => variant.id === selected);
   async function generate() {
     if (!scene || running) return;
     const request = new AbortController(); controller.current = request;
     setRunning(true); setError(''); setVariants([]); setSelected(undefined);
+    promptHistory.recordPrompt(brief);
     try {
       const result = await generateVariants(scene, project.characters, brief, count, request.signal, setAgent);
       if (!request.signal.aborted) { setVariants(result); setSelected(result[0]?.id); setAgent(agentRoles.length); }
@@ -46,7 +52,7 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onApply, on
     <div className="assistant-scroll" id="assistant-content" role="tabpanel" aria-labelledby={`assistant-tab-${tab}`}>
       {tab === 'context' ? <SceneContext key={project.id} project={project} scene={scene} onSelect={onSelect} onChange={onChange} /> : !scene ? <p className="empty-search">Dodaj scenę, aby rozpocząć.</p> : tab === 'generate' ? <>
         <section className="panel-section"><span className="eyebrow">BIEŻĄCA SCENA</span><div className="current-scene"><span className="scene-token">{String(project.scenes.indexOf(scene) + 1).padStart(2, '0')}</span><div><strong>{scene.title}</strong><small>Akt {formatAct(scene.act)} · {scene.characterIds.length} postaci</small></div></div></section>
-        <section className="panel-section"><label className="field-label" htmlFor="scene-brief">Kierunek sceny</label><textarea id="scene-brief" className="field-textarea" rows={4} value={brief} disabled={running} onChange={event => setBrief(event.target.value)} /><div className="variant-count"><span>Warianty</span><div className="segmented-control" aria-label="Liczba wariantów">{[1, 2, 3].map(number => <button key={number} aria-pressed={count === number} disabled={running} onClick={() => setCount(number)}>{number}</button>)}</div></div>
+        <section className="panel-section"><div className="prompt-field-heading"><label className="field-label" htmlFor="scene-brief">Kierunek sceny</label><IconButton className="prompt-history-trigger" label="Historia promptów" aria-haspopup="dialog" disabled={running} onClick={() => setHistoryOpen(true)}><History size={16} /><small aria-hidden="true">{promptHistory.entries.length}</small></IconButton></div><textarea id="scene-brief" className="field-textarea" rows={4} value={brief} disabled={running} onChange={event => setBrief(event.target.value)} />{promptHistory.warning && <p className="form-error" role="alert">{promptHistory.warning}</p>}<div className="variant-count"><span>Warianty</span><div className="segmented-control" aria-label="Liczba wariantów">{[1, 2, 3].map(number => <button key={number} aria-pressed={count === number} disabled={running} onClick={() => setCount(number)}>{number}</button>)}</div></div>
           <button className="button primary full-width" onClick={running ? () => { controller.current?.abort(); setAgent(-1); } : generate}>{running ? <Square size={13} /> : <Play size={14} />}{running ? 'Zatrzymaj' : 'Generuj warianty'}</button>
           {error && <p className="form-error" role="alert">{error}</p>}
         </section>
@@ -58,6 +64,10 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onApply, on
       </>}
     </div>
     <div className="assistant-footer"><span className="status-dot" /><span>Dane lokalne · brak połączenia z LLM</span></div>
+    {historyOpen && scene && <PromptHistoryDialog sceneTitle={scene.title} entries={promptHistory.entries} onClose={() => setHistoryOpen(false)} onSelect={prompt => {
+      setBrief(prompt); setHistoryOpen(false);
+      requestAnimationFrame(() => document.getElementById('scene-brief')?.focus());
+    }} />}
     {preview && <Modal title={`Wariant: ${preview.title}`} onClose={() => setPreview(undefined)}><div className="variant-preview"><strong>{scene?.heading}</strong>{preview.blocks.map(block => <p key={block.id} className={`preview-${block.type}`}>{block.text}</p>)}</div><div className="modal-actions"><button className="button" onClick={() => setPreview(undefined)}>Zamknij</button><button className="button primary" onClick={() => { setSelected(preview.id); setPreview(undefined); }}>Wybierz wariant</button></div></Modal>}
   </aside>;
 }

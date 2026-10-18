@@ -139,6 +139,23 @@ h1, h2, h3, p { margin: 0; }
 .field-textarea, .field-input { width: 100%; padding: 10px; font-size: 12px; background: #fff; border: 1px solid #dce1e4; border-radius: 3px; line-height: 1.65; }
 .field-textarea { min-height: 70px; }
 .field-textarea:focus, .field-input:focus { outline: 1px solid #7e9a8b; outline-offset: 0; }
+.prompt-field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.prompt-field-heading .field-label { margin-bottom: 0; }
+.prompt-history-trigger { width: auto; min-width: 30px; height: 26px; padding: 0 5px; gap: 6px; }
+.prompt-history-trigger small { font-size: 10px; font-variant-numeric: tabular-nums; }
+.modal-body.prompt-history-body { padding: 0; }
+.prompt-history-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 23px; border-bottom: 1px solid var(--border); font-size: 12px; color: #738078; }
+.prompt-history-summary > span { min-width: 0; overflow-wrap: anywhere; }
+.prompt-history-summary small { flex-shrink: 0; color: #9aa39d; font-variant-numeric: tabular-nums; }
+.prompt-history-list { list-style: none; padding: 0; margin: 0; }
+.prompt-history-list > li + li { border-top: 1px solid #e9edeb; }
+.prompt-history-entry { display: block; width: 100%; text-align: left; padding: 18px 23px; }
+.prompt-history-entry:hover { background: #f4f7f5; }
+.prompt-history-entry:focus-visible { outline-offset: -3px; }
+.prompt-history-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 9px; color: #939d97; font-size: 10px; font-variant-numeric: tabular-nums; }
+.prompt-history-text { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; color: #4d5b53; }
+.prompt-history-empty { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 36px 23px; color: #98a39b; }
+.prompt-history-empty p { font-size: 12px; text-align: center; }
 .variant-count { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0; font-size: 11px; color: #7a8189; }
 .segmented-control { display: inline-flex; border: 1px solid #dfe3e6; border-radius: 3px; padding: 2px; background: #f7f8f9; }
 .segmented-control button { width: 29px; height: 23px; border-radius: 2px; font-size: 11px; color: #9ca2a8; }

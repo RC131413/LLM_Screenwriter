@@ -73,6 +73,13 @@ export interface UserPreferences {
   };
 }
 export interface SceneVariant { id: string; title: string; description: string; blocks: ScriptBlock[] }
+export interface PromptHistoryEntry {
+  id: string;
+  project_id: string;
+  scene_id: string;
+  prompt: string;
+  created_at: string;
+}
 
 export const blockLabels: Record<BlockType, string> = {
   action: 'Akcja', character: 'Postać', dialogue: 'Dialog',

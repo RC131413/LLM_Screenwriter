@@ -1,0 +1,10 @@
+**
+!Dockerfile
+!requirements.txt
+!manage.py
+!backend/
+!backend/**
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/media/
+backend/staticfiles/

@@ -21,7 +21,7 @@ interface Timestamped {
   updated_at: string;
 }
 
-// API DTOs intentionally do not reuse the frontend's mock/editor data shapes.
+// API DTOs are separate from the editor's view models.
 export interface ApiProfile extends Timestamped {
   user_id: ApiId;
   display_name: string;
@@ -350,7 +350,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   const response = await fetch(url.toString(), {
-    ...init, method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+    ...init, cache: init.cache ?? 'no-store', method, headers, body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'include', mode: 'cors', redirect: 'error',
   });
   if (response.ok && (response.status === 204 || response.status === 205 || method === 'HEAD')) {
@@ -363,7 +363,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     if (response.ok) throw new ApiError(response.status, { detail: 'The API returned invalid JSON.' });
     data = text;
   }
-  if (!response.ok) throw new ApiError(response.status, data);
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined' && !['auth/login', 'auth/register'].includes(url.pathname.slice(new URL(API_BASE_URL).pathname.length))) {
+      window.dispatchEvent(new Event('api:unauthorized'));
+    }
+    throw new ApiError(response.status, data);
+  }
   return data as T;
 }
 

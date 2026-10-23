@@ -26,7 +26,7 @@ export function SceneContext({ project, scene, onSelect, onChange }: Props) {
       <label className="field-label spaced" htmlFor="context-scene">Scena</label>
       <select id="context-scene" className="field-input" value={selectedScene?.id ?? ''} disabled={!scenes.length} onChange={event => onSelect(event.target.value)}>
         {!selectedScene && <option value="">{scenes.length ? 'Wybierz scenę' : 'Brak scen w tym akcie'}</option>}
-        {scenes.map(item => <option value={item.id} key={item.id}>{String(project.scenes.indexOf(item) + 1).padStart(2, '0')} · {item.title || 'Bez tytułu'}</option>)}
+        {scenes.map(item => <option value={item.id} key={item.id}>{String(item.scene_number).padStart(2, '0')} · {item.title || 'Bez tytułu'}</option>)}
       </select>
       {selectedScene ? <><label className="field-label spaced" htmlFor="scene-synopsis">Cel sceny</label><textarea id="scene-synopsis" className="field-textarea" rows={4} value={selectedScene.synopsis} onChange={event => onChange({ ...selectedScene, synopsis: event.target.value })} /></> : <p className="context-empty">{scenes.length ? 'Wybierz scenę.' : 'Brak scen w tym akcie.'}</p>}
     </section>

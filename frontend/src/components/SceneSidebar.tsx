@@ -19,7 +19,7 @@ export function SceneSidebar({ project, sceneId, onSelect, onClose }: Props) {
           <ChevronDown size={13} className={!query && collapsed.includes(act) ? 'collapsed' : ''} /><span>AKT {formatAct(act)}{title && ` · ${title}`}</span><small>{project.scenes.filter(scene => scene.act === act).length}</small>
         </button>
         {(query || !collapsed.includes(act)) && visible.filter(scene => scene.act === act).map(scene => <button key={scene.id} className={`scene-item ${scene.id === sceneId ? 'selected' : ''}`} onClick={() => onSelect(scene.id)} aria-current={scene.id === sceneId ? 'page' : undefined}>
-          <span className="scene-number">{String(project.scenes.indexOf(scene) + 1).padStart(2, '0')}</span><span className="scene-item-text"><strong>{scene.title}</strong><small>{scene.heading.replace(/^(WN\.|PL\.)\s*/, '').split(' — ')[0]}</small></span><span className={`scene-status-dot ${scene.status}`} title={scene.status === 'ready' ? 'Gotowa' : scene.status === 'review' ? 'Do sprawdzenia' : 'Szkic'} />
+          <span className="scene-number">{String(scene.scene_number).padStart(2, '0')}</span><span className="scene-item-text"><strong>{scene.title}</strong><small>{scene.heading.replace(/^(WN\.|PL\.)\s*/, '').split(' — ')[0]}</small></span><span className={`scene-status-dot ${scene.status}`} title={scene.status === 'ready' ? 'Gotowa' : scene.status === 'review' ? 'Do sprawdzenia' : 'Szkic'} />
         </button>)}
       </section>)}
       {query && visible.length === 0 && <p className="empty-search">Brak pasujących scen.</p>}

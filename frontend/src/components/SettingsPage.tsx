@@ -5,19 +5,23 @@ import { UserMenu } from './UserMenu';
 import { AccountSettings } from './AccountSettings';
 import { PreferencesForm } from './PreferencesForm';
 import { StatisticsView } from './StatisticsView';
+import type { ChangePasswordInput } from '../services/api';
 
 interface Props {
   tab: SettingsTab;
   onTab: (tab: SettingsTab) => void;
   returnHref: string;
   profile: UserProfile;
-  onProfileSave: (profile: Pick<UserProfile, 'display_name' | 'avatar_url'>) => boolean;
+  onProfileSave: (profile: Pick<UserProfile, 'username' | 'display_name' | 'avatar_url'>) => Promise<void>;
   preferences: UserPreferences;
-  onPreferencesSave: (preferences: UserPreferences) => boolean;
+  onPreferencesSave: (preferences: UserPreferences) => Promise<UserPreferences>;
+  onPreferencesReset: () => Promise<UserPreferences>;
+  onLogout: () => void;
+  onPasswordChange: (data: ChangePasswordInput) => Promise<unknown>;
   projects: Project[];
 }
 
-export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, preferences, onPreferencesSave, projects }: Props) {
+export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, preferences, onPreferencesSave, onPreferencesReset, onLogout, onPasswordChange, projects }: Props) {
   const [preferencesVersion, setPreferencesVersion] = useState(0);
   const tabs = [
     { id: 'account', label: 'Moje konto', icon: UserRound },
@@ -29,7 +33,7 @@ export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, p
       <div className="brand"><strong>AgentDraft</strong></div>
       <span className="dashboard-location">Ustawienia</span>
       <div className="topbar-actions"><a className="editor-back-link" href={returnHref}><ArrowLeft size={15} /><span>{returnHref.startsWith('#project/') ? 'Wróć do edytora' : 'Wróć do projektów'}</span></a></div>
-      <UserMenu profile={profile} onSettings={() => onTab('account')} />
+      <UserMenu profile={profile} onSettings={() => onTab('account')} onLogout={onLogout} />
     </header>
     <main className="settings-main">
       <div className="settings-content">
@@ -41,7 +45,7 @@ export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, p
           onTab(tabs[next].id); document.getElementById(`settings-tab-${tabs[next].id}`)?.focus();
         }}><item.icon size={16} /><span>{item.label}</span></button>)}</div>
         <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
-          {tab === 'account' ? <AccountSettings profile={profile} onSave={onProfileSave} /> : tab === 'ai' ? <section className="settings-preferences"><PreferencesForm key={preferencesVersion} preferences={preferences} onSave={onPreferencesSave} onCancel={() => setPreferencesVersion(value => value + 1)} /></section> : <StatisticsView projects={projects} />}
+          {tab === 'account' ? <AccountSettings profile={profile} onSave={onProfileSave} onLogout={onLogout} onPasswordChange={onPasswordChange} /> : tab === 'ai' ? <section className="settings-preferences"><PreferencesForm key={preferencesVersion} preferences={preferences} onSave={onPreferencesSave} onReset={onPreferencesReset} onCancel={() => setPreferencesVersion(value => value + 1)} /></section> : <StatisticsView projects={projects} />}
         </div>
       </div>
     </main>

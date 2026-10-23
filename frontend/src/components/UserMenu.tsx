@@ -6,7 +6,7 @@ export function UserAvatar({ profile }: { profile: Pick<UserProfile, 'display_na
   return <span className="user-avatar" aria-hidden="true">{profile.avatar_url ? <img src={profile.avatar_url} alt="" /> : <UserRound size={19} strokeWidth={1.5} />}</span>;
 }
 
-export function UserMenu({ profile, onSettings }: { profile: UserProfile; onSettings: () => void }) {
+export function UserMenu({ profile, onSettings, onLogout }: { profile: UserProfile; onSettings: () => void; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -36,7 +36,7 @@ export function UserMenu({ profile, onSettings }: { profile: UserProfile; onSett
     }}>
       <div className="user-menu-identity"><strong>{profile.display_name}</strong><span>{profile.email}</span></div>
       <button type="button" role="menuitem" onClick={() => { setOpen(false); onSettings(); }}><Settings size={16} />Ustawienia</button>
-      <button type="button" role="menuitem" className="logout-action" onClick={() => { setOpen(false); window.location.hash = '#login'; }}><LogOut size={16} />Wyloguj</button>
+      <button type="button" role="menuitem" className="logout-action" onClick={() => { setOpen(false); onLogout(); }}><LogOut size={16} />Wyloguj</button>
     </div>}
   </div>;
 }

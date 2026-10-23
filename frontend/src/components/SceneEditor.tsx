@@ -55,11 +55,11 @@ export function SceneEditor({ scene, sceneNumber, zoom, onChange, onDelete, undo
       <div className="toolbar-end"><select aria-label="Status sceny" value={scene.status} onChange={event => onChange({ ...scene, status: event.target.value as Scene['status'] })}>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><IconButton label="Usuń scenę" onClick={onDelete}><Trash2 size={16} /></IconButton></div>
     </div>
     <div className="document-scroll">
-      <div className="document-caption"><span>SCENA {String(sceneNumber).padStart(2, '0')}</span><div className="scene-title-field"><input aria-label="Tytuł sceny" title="Edytuj tytuł sceny" value={scene.title} onChange={event => onChange({ ...scene, title: event.target.value })} /><Pencil size={14} aria-hidden="true" /></div></div>
+      <div className="document-caption"><span>SCENA {String(sceneNumber).padStart(2, '0')}</span><div className="scene-title-field"><input aria-label="Tytuł sceny" title="Edytuj tytuł sceny" maxLength={255} value={scene.title} onChange={event => onChange({ ...scene, title: event.target.value })} /><Pencil size={14} aria-hidden="true" /></div></div>
       <div className="document-sheet" style={{ zoom: zoom / 100 }}>
       <article className="script-page" aria-label="Edytor scenariusza">
         <div className="page-number">{sceneNumber}.</div>
-        <AutoTextarea className="scene-heading" aria-label="Nagłówek sceny" spellCheck={false} value={scene.heading} onChange={event => onChange({ ...scene, heading: event.target.value })} onFocus={() => setFocusedId(undefined)} />
+        <AutoTextarea className="scene-heading" aria-label="Nagłówek sceny" maxLength={255} spellCheck={false} value={scene.heading} onChange={event => onChange({ ...scene, heading: event.target.value })} onFocus={() => setFocusedId(undefined)} />
         {scene.blocks.map((block, index) => <div key={block.id} className={`script-block ${block.type} ${focusedId === block.id ? 'focused' : ''}`}>
           <AutoTextarea id={`block-${block.id}`} aria-label={`${blockLabels[block.type]} ${index + 1}`} spellCheck={false} value={block.text} placeholder={blockLabels[block.type]} onFocus={() => setFocusedId(block.id)} onChange={event => changeBlock(block.id, { text: event.target.value })} />
         </div>)}

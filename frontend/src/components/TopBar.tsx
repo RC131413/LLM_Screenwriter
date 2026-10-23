@@ -8,6 +8,7 @@ interface Props {
   onProject: (id: string) => void; onNewProject: () => void; onEditProject: () => void; onSettings: () => void; onExport: () => void;
   onSidebar: () => void; onAssistant: () => void; sidebarOpen: boolean; assistantOpen: boolean;
   profile: UserProfile; onAccountSettings: () => void;
+  onLogout: () => void;
 }
 export function TopBar(props: Props) {
   return <header className="topbar editor-topbar">
@@ -27,6 +28,6 @@ export function TopBar(props: Props) {
       <IconButton label="Ustawienia" onClick={props.onSettings}><Settings2 size={18} /></IconButton>
       <button className="button export-button" onClick={props.onExport}><Download size={15} /><span>Eksportuj</span></button>
     </div>
-    <UserMenu profile={props.profile} onSettings={props.onAccountSettings} />
+    <UserMenu profile={props.profile} onSettings={props.onAccountSettings} onLogout={props.onLogout} />
   </header>;
 }

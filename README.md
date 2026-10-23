@@ -217,9 +217,40 @@ standard `detail` list. Unknown input fields are rejected.
 See [Ninja authentication](https://django-ninja.dev/guide/authentication/) and
 [CSRF](https://django-ninja.dev/guide/csrf/).
 
-The frontend still uses its existing mocks; its screens have not been connected
-to these routes. Cross-origin requests are configured as described below.
+The frontend uses these routes for sessions, profiles, preferences, projects,
+acts, scenes, cast, characters, prompt history, variants and statistics. No
+browser-local project/profile/preference fallback is used. Cross-origin requests
+are configured as described below.
 No database model changes or new migrations are needed for this API.
+
+### Frontend Integration
+
+`frontend/src/hooks/useSession.ts` restores the Django session on mount and handles
+real login, registration, password change and logout. The profile and AI settings
+come from the account endpoints. Avatar editing uses the HTTP/HTTPS URL supported
+by the backend; there is no file-upload endpoint yet.
+
+`useWorkspace.ts` loads all project collections with pagination and bounded
+workspace hydration. Project/act/character operations wait for API confirmation;
+scene edits are debounced for 600 ms and serialized, including cast changes.
+Failures retain unsaved scene drafts in memory, show a retry action and do not
+report success. A before-unload warning protects pending writes. Undo/redo applies
+only to scene editing and is persisted through the same save path; permanent
+record deletion cannot be undone. Nonempty acts cannot be deleted before their
+scenes are moved or removed. No domain data is loaded from or saved to localStorage.
+
+`frontend/src/services/workspaceData.ts` maps API DTOs to editor view models,
+preserving JSON metadata and server IDs. Editor blocks live in `editor_metadata`,
+scene goals/notes in `ai_metadata`, and cast membership in `SceneCharacter`.
+`usePromptHistory.ts` reads and saves scene-specific history through the API.
+The assistant reads actual stored runs, agent executions and variants. Saving a
+prompt does not claim to generate text: no LLM worker is connected yet. Choosing
+or applying a stored variant uses the selection endpoint. Statistics include
+server-provided prompt activity and generation totals.
+
+The old static project data and AI simulator files have been removed. Existing
+database records, including data created by the optional seed command, remain
+ordinary persistent backend data; the frontend does not supply example records.
 
 Tests (Django creates and removes a separate PostgreSQL test database):
 
@@ -260,7 +291,7 @@ Session cookies stay HttpOnly and host-only. CSRF tokens can be read from the
 existing `/api/auth/csrf` JSON response, so React need not read a different host's
 cookies. The CSRF bootstrap response is marked `Cache-Control: no-store`.
 
-Minimal React/browser fetch sequence (no frontend screens were changed):
+Minimal browser fetch sequence (the React client handles this in `src/services/api.ts`):
 
 ```javascript
 const api = 'http://127.0.0.1:8000/api';

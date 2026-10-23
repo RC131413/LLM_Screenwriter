@@ -599,3 +599,11 @@ h1, h2, h3, p { margin: 0; }
   .spin { animation: none; }
   .generation-progress::-webkit-progress-value { transition: none; }
 }
+
+.request-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px 24px; min-height: 160px; text-align: center; color: var(--muted, #666); }
+body > #root > .request-state { min-height: 100vh; }
+.request-state p { max-width: 580px; overflow-wrap: anywhere; }
+.variant-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 12pt 'Courier New', monospace; }
+.account-fields > div { min-width: 0; }
+.form-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.modal-error { margin: 16px 24px; }

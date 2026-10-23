@@ -5,6 +5,7 @@ export type View = 'script' | 'outline' | 'characters';
 export interface ScriptBlock { id: string; type: BlockType; text: string }
 export interface Scene {
   id: string;
+  scene_number: number;
   title: string;
   heading: string;
   act: number;
@@ -13,6 +14,8 @@ export interface Scene {
   characterIds: string[];
   blocks: ScriptBlock[];
   notes: string;
+  ai_metadata: import('./services/api').JsonObject;
+  editor_metadata: import('./services/api').JsonObject;
 }
 export interface Character {
   id: string;
@@ -24,8 +27,10 @@ export interface Character {
   voice: string;
   appearance: string;
   backstory: string;
+  voice_profile: import('./services/api').JsonObject;
 }
 export interface Act {
+  id: string;
   act_number: number;
   title: string;
   summary: string;
@@ -54,6 +59,7 @@ export type SettingsTab = 'account' | 'ai' | 'statistics';
 export type AuthView = 'login' | 'register';
 
 export interface UserProfile {
+  username: string;
   display_name: string;
   email: string;
   avatar_url: string | null;
@@ -72,7 +78,6 @@ export interface UserPreferences {
     max_tokens: number;
   };
 }
-export interface SceneVariant { id: string; title: string; description: string; blocks: ScriptBlock[] }
 export interface PromptHistoryEntry {
   id: string;
   project_id: string;
@@ -91,8 +96,6 @@ export const statusLabels: Record<SceneStatus, string> = {
 export const newId = () => crypto.randomUUID();
 
 export const screenplayModel = 'Bielik 11B';
-
-export const createAct = (act_number: number): Act => ({ act_number, title: '', summary: '' });
 
 export function formatAct(number: number): string {
   if (number > 3999) return String(number);

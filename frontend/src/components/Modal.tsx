@@ -3,7 +3,7 @@ import type { PointerEvent, ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { IconButton } from './IconButton';
 
-export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Modal({ title, children, onClose, error }: { title: string; children: ReactNode; onClose: () => void; error?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const backdropPress = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   function isBackdrop(event: PointerEvent<HTMLDialogElement>) {
@@ -25,6 +25,7 @@ export function Modal({ title, children, onClose }: { title: string; children: R
       if (press && press.pointerId === event.pointerId && isBackdrop(event) && Math.hypot(event.clientX - press.x, event.clientY - press.y) <= 6) onClose();
     }}>
     <div className="modal-header"><h2>{title}</h2><IconButton label="Zamknij okno" onClick={onClose}><X size={18} /></IconButton></div>
+    {error && <p className="form-error modal-error" role="alert">{error}</p>}
     {children}
   </dialog>;
 }

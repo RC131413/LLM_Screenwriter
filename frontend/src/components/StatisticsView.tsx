@@ -3,6 +3,10 @@ import type { Project, SceneStatus } from '../types';
 import { statusLabels } from '../types';
 import { isArchived, isInTrash } from '../services/projectLibrary';
 import { projectHref } from '../hooks/useProjectNavigation';
+import { api } from '../services/api';
+import type { ApiStatistics } from '../services/api';
+import { errorMessage } from '../services/workspaceData';
+import { RequestState } from './RequestState';
 
 const number = new Intl.NumberFormat('pl-PL');
 const date = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -13,6 +17,15 @@ const openedAt = (project: Project) => {
 };
 
 export function StatisticsView({ projects }: { projects: Project[] }) {
+  const [statistics, setStatistics] = useState<ApiStatistics | null>(null);
+  const [error, setError] = useState('');
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController(); setError(''); setStatistics(null);
+    void api.account.getStatistics({ signal: controller.signal }).then(value => { if (!controller.signal.aborted) setStatistics(value); })
+      .catch(failure => { if (!controller.signal.aborted) setError(errorMessage(failure)); });
+    return () => controller.abort();
+  }, [version]);
   const library = projects.filter(project => !isInTrash(project));
   const scenes = library.flatMap(project => project.scenes);
   const archived = library.filter(isArchived).length;
@@ -22,7 +35,8 @@ export function StatisticsView({ projects }: { projects: Project[] }) {
   const days = Array.from({ length: 7 }, (_, index) => {
     const day = new Date(today); day.setDate(day.getDate() - 6 + index);
     const next = new Date(day); next.setDate(next.getDate() + 1);
-    return { day, count: recent.filter(project => openedAt(project) >= day.getTime() && openedAt(project) < next.getTime()).length };
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    return { day, count: statistics?.prompt_activity.find(item => item.date === key)?.count ?? 0 };
   });
   const maxCount = Math.max(1, ...days.map(day => day.count));
   const metrics = [
@@ -31,8 +45,10 @@ export function StatisticsView({ projects }: { projects: Project[] }) {
     { label: 'Słowa scenariusza', value: totalWords, icon: BookOpenText },
     { label: 'Postacie', value: library.reduce((sum, project) => sum + project.characters.length, 0), icon: UsersRound },
   ];
+  if (error || !statistics) return <RequestState loading={!error} error={error} onRetry={() => setVersion(value => value + 1)} />;
   return <div className="statistics-view">
     <dl className="statistics-metrics">{metrics.map(metric => <div key={metric.label}><dt><metric.icon size={16} />{metric.label}</dt><dd>{number.format(metric.value)}</dd></div>)}</dl>
+    <dl className="statistics-metrics"><div><dt>Prompty</dt><dd>{statistics.generation_requests}</dd></div><div><dt>Przebiegi zakończone</dt><dd>{statistics.completed_runs}</dd></div><div><dt>Warianty</dt><dd>{statistics.variants}</dd></div><div><dt>Czas generowania</dt><dd>{(statistics.total_generation_duration_ms / 1000).toFixed(1)} s</dd></div></dl>
     <div className="statistics-library-summary"><FolderOpen size={14} />Aktywne: {library.length - archived}<Archive size={14} />Archiwum: {archived}<span>Bez projektów w koszu</span></div>
     <div className="statistics-columns">
       <section className="settings-section"><div className="settings-section-heading"><h2>Statusy scen</h2><span>{scenes.length ? Math.round(scenes.filter(scene => scene.status === 'ready').length / scenes.length * 100) : 0}% gotowych</span></div>
@@ -41,8 +57,8 @@ export function StatisticsView({ projects }: { projects: Project[] }) {
           return <div key={status} className={`scene-status-row ${status}`}><div><span>{statusLabels[status]}</span><strong>{count}</strong></div><progress max={Math.max(1, scenes.length)} value={count} aria-label={`Sceny: ${statusLabels[status]}`} /></div>;
         })}</div>
       </section>
-      <section className="settings-section"><div className="settings-section-heading"><h2>Ostatnie otwarcia</h2><span>7 dni</span></div>
-        <figure className="activity-chart"><div className="activity-bars">{days.map(({ day, count }) => <div className="activity-day" key={day.toISOString()}><span className="activity-count">{count}</span><div className="activity-bar-track"><span style={{ height: `${count / maxCount * 100}%` }} /></div><time dateTime={`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`} title={day.toLocaleDateString('pl-PL')}>{day.toLocaleDateString('pl-PL', { weekday: 'short' })}</time></div>)}</div><figcaption>Ostatnie otwarcie każdego projektu</figcaption></figure>
+      <section className="settings-section"><div className="settings-section-heading"><h2>Wysłane prompty</h2><span>7 dni</span></div>
+        <figure className="activity-chart"><div className="activity-bars">{days.map(({ day, count }) => <div className="activity-day" key={day.toISOString()}><span className="activity-count">{count}</span><div className="activity-bar-track"><span style={{ height: `${count / maxCount * 100}%` }} /></div><time dateTime={`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`} title={day.toLocaleDateString('pl-PL')}>{day.toLocaleDateString('pl-PL', { weekday: 'short' })}</time></div>)}</div><figcaption>Liczba zapisanych promptów w bazie</figcaption></figure>
       </section>
     </div>
     <section className="settings-section"><div className="settings-section-heading"><h2>Projekty w liczbach</h2><span>{library.length}</span></div>
@@ -53,3 +69,4 @@ export function StatisticsView({ projects }: { projects: Project[] }) {
     </section>
   </div>;
 }
+import { useEffect, useState } from 'react';

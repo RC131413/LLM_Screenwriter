@@ -1,131 +1,231 @@
-import { useCallback, useEffect, useReducer, useState } from 'react';
-import { mockProjects } from '../data/mockProjects';
-import { createAct } from '../types';
-import type { Act, Character, Project } from '../types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '../services/api';
+import type { CreateProjectInput, ProjectAction } from '../services/api';
+import { allPages, errorMessage, scenePayload, toProject } from '../services/workspaceData';
+import type { Act, Character, Project, Scene } from '../types';
 
-const storageKey = 'llm-screenwriter.workspace.v1';
-type History = { projects: Project[]; past: Project[][]; future: Project[][] };
-type Action = { type: 'change'; update: (projects: Project[]) => Project[] } | { type: 'undo' } | { type: 'redo' } |
-  { type: 'opened'; id: string; timestamp: string };
+export function useWorkspace(userId?: number) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const current = useRef<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [error, setError] = useState('');
+  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [mutating, setMutating] = useState(false);
+  const [version, setVersion] = useState(0);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const pending = useRef(new Map<string, Scene>());
+  const past = useRef(new Map<string, Scene[]>());
+  const future = useRef(new Map<string, Scene[]>());
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const jobs = useRef(0);
+  const mutationCount = useRef(0);
+  const epoch = useRef(0);
 
-type StoredCharacter = Omit<Character, 'appearance' | 'backstory'> & Partial<Pick<Character, 'appearance' | 'backstory'>>;
-type StoredProject = Omit<Project, 'acts' | 'characters' | 'synopsis' | 'target_audience'> &
-  Partial<Pick<Project, 'synopsis' | 'target_audience'>> & {
-    acts?: (number | Act)[];
-    characters: StoredCharacter[];
+  const replace = useCallback((next: Project[]) => { current.current = next; setProjects(next); }, []);
+  const enqueue = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const generation = epoch.current;
+    jobs.current++; setSaveState('saving'); setError('');
+    const result = queue.current.catch(() => undefined).then(async () => {
+      if (generation !== epoch.current) throw new Error('Sesja została zmieniona.');
+      return operation();
+    });
+    queue.current = result.then(() => undefined, () => undefined);
+    return result.then(value => {
+      jobs.current--;
+      if (generation === epoch.current && !jobs.current && !pending.current.size) setSaveState('saved');
+      return value;
+    }, failure => {
+      jobs.current--;
+      if (generation === epoch.current) { setError(errorMessage(failure)); setSaveState('error'); }
+      throw failure;
+    });
+  }, []);
+
+  const reloadProject = useCallback(async (projectId: string) => {
+    const generation = epoch.current;
+    const project = toProject(await api.projects.workspace(Number(projectId)));
+    if (generation !== epoch.current) return project;
+    for (const scene of project.scenes) { past.current.delete(scene.id); future.current.delete(scene.id); }
+    project.scenes = project.scenes.map(scene => pending.current.get(scene.id) ?? scene);
+    replace(current.current.some(item => item.id === projectId)
+      ? current.current.map(item => item.id === projectId ? project : item) : [project, ...current.current]);
+    return project;
+  }, [replace]);
+
+  const flush = useCallback(async () => {
+    const generation = epoch.current;
+    clearTimeout(timer.current);
+    const drafts = [...pending.current.values()];
+    pending.current.clear();
+    if (drafts.length) {
+      try {
+        await enqueue(async () => {
+          for (const scene of drafts) {
+            const saved = await api.scenes.update(Number(scene.id), scenePayload(scene));
+            const desired = new Set(scene.characterIds);
+            for (const member of saved.cast_members) {
+              if (!desired.has(String(member.character_id))) await api.cast.delete(member.id);
+            }
+            const existing = new Set(saved.cast_members.map(member => String(member.character_id)));
+            for (const characterId of desired) {
+              if (!existing.has(characterId)) await api.cast.create(saved.id, { character_id: Number(characterId) });
+            }
+          }
+        });
+      } catch (failure) {
+        if (generation === epoch.current) {
+          for (const scene of drafts) if (!pending.current.has(scene.id)) pending.current.set(scene.id, scene);
+        }
+        throw failure;
+      }
+    }
+    await queue.current;
+  }, [enqueue]);
+
+  useEffect(() => {
+    epoch.current++; clearTimeout(timer.current);
+    pending.current.clear(); past.current.clear(); future.current.clear();
+    replace([]); setError(''); setLoadError(''); setLoading(!!userId); setSaveState('saved');
+    if (!userId) return;
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    void Promise.all((['all', 'archive', 'trash'] as const).map(collection =>
+      allPages(params => api.projects.list({ ...params, collection }, options), controller.signal),
+    )).then(async collections => {
+      const unique = [...new Map(collections.flat().map(project => [project.id, project])).values()];
+      const loaded: Project[] = [];
+      // Bound hydration requests while fetching counts and full editor data.
+      for (let index = 0; index < unique.length; index += 6) {
+        loaded.push(...await Promise.all(unique.slice(index, index + 6).map(async project =>
+          toProject(await api.projects.workspace(project.id, options)))));
+      }
+      if (!controller.signal.aborted) replace(loaded);
+    }).catch(failure => { if (!controller.signal.aborted) setLoadError(errorMessage(failure)); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [userId, version, replace]);
+
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (pending.current.size || jobs.current) { event.preventDefault(); event.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => { window.removeEventListener('beforeunload', warn); clearTimeout(timer.current); };
+  }, []);
+
+  const draftScene = useCallback((scene: Scene, history = true) => {
+    const previous = current.current.flatMap(project => project.scenes).find(item => item.id === scene.id);
+    if (!previous) return;
+    if (history) {
+      past.current.set(scene.id, [...(past.current.get(scene.id) ?? []), previous].slice(-50));
+      future.current.delete(scene.id);
+    }
+    replace(current.current.map(project => ({ ...project, scenes: project.scenes.map(item => item.id === scene.id ? scene : item) })));
+    pending.current.set(scene.id, scene); setSaveState('saving'); setHistoryVersion(value => value + 1);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => { void flush().catch(() => undefined); }, 600);
+  }, [flush, replace]);
+
+  const mutate = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
+    mutationCount.current++; setMutating(true);
+    try { await flush(); return await enqueue(operation); }
+    finally { mutationCount.current--; if (!mutationCount.current) setMutating(false); }
+  }, [enqueue, flush]);
+
+  const projectById = (projectId: string) => {
+    const project = current.current.find(item => item.id === projectId);
+    if (!project) throw new Error('Nie znaleziono projektu.');
+    return project;
   };
 
-function isAct(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
-}
-
-function isStoredAct(value: unknown): value is number | Act {
-  if (isAct(value)) return true;
-  if (!value || typeof value !== 'object') return false;
-  const act = value as Act;
-  return isAct(act.act_number) && typeof act.title === 'string' && typeof act.summary === 'string';
-}
-
-const storedActNumber = (act: number | Act) => typeof act === 'number' ? act : act.act_number;
-
-function isProject(value: unknown): value is StoredProject {
-  if (!value || typeof value !== 'object') return false;
-  const item = value as StoredProject;
-  return ['id', 'title', 'genre', 'logline'].every(key => typeof item[key as keyof Project] === 'string') &&
-    (item.synopsis === undefined || typeof item.synopsis === 'string') &&
-    (item.target_audience === undefined || typeof item.target_audience === 'string') &&
-    (item.metadata === undefined || (item.metadata !== null && typeof item.metadata === 'object' && !Array.isArray(item.metadata) &&
-      (item.metadata.is_favorite === undefined || typeof item.metadata.is_favorite === 'boolean') &&
-      ['archived_at', 'deleted_at', 'last_opened_at'].every(key => item.metadata?.[key] == null || typeof item.metadata[key] === 'string'))) &&
-    (item.acts === undefined || (Array.isArray(item.acts) && item.acts.every(isStoredAct) && new Set(item.acts.map(storedActNumber)).size === item.acts.length)) &&
-    Array.isArray(item.scenes) && item.scenes.every(scene => scene &&
-      ['id', 'title', 'heading', 'synopsis', 'notes'].every(key => typeof scene[key as keyof typeof scene] === 'string') &&
-      isAct(scene.act) && (item.acts === undefined || item.acts.some(act => storedActNumber(act) === scene.act)) && ['draft', 'review', 'ready'].includes(scene.status) &&
-      Array.isArray(scene.characterIds) && scene.characterIds.every(id => typeof id === 'string') &&
-      Array.isArray(scene.blocks) && scene.blocks.every(block => block && typeof block.id === 'string' &&
-        typeof block.text === 'string' && ['action', 'character', 'dialogue', 'parenthetical', 'transition'].includes(block.type))) &&
-    Array.isArray(item.characters) && item.characters.every(character => character &&
-      ['id', 'name', 'age', 'role', 'goal', 'flaw', 'voice'].every(key => typeof character[key as keyof typeof character] === 'string') &&
-      (character.appearance === undefined || typeof character.appearance === 'string') &&
-      (character.backstory === undefined || typeof character.backstory === 'string'));
-}
-
-function loadWorkspace(): { projects: Project[]; warning: string } {
-  try {
-    const stored = localStorage.getItem(storageKey);
-    if (stored) {
-      const parsed: unknown = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.every(isProject)) {
-        return {
-          projects: parsed.map(project => ({
-            ...project,
-            synopsis: project.synopsis ?? '',
-            target_audience: project.target_audience ?? '',
-            // Preserve scene references while upgrading the earlier numeric acts.
-            acts: (project.acts ?? [...new Set([1, 2, 3, ...project.scenes.map(scene => scene.act)])].sort((a, b) => a - b))
-              .map(act => typeof act === 'number' ? createAct(act) : act),
-            characters: project.characters.map(character => ({
-              ...character, appearance: character.appearance ?? '', backstory: character.backstory ?? '',
-            })),
-          })),
-          warning: '',
-        };
-      }
-      return { projects: structuredClone(mockProjects), warning: 'Zapis lokalny jest niezgodny z formatem. Wczytano dane przykładowe.' };
-    }
-    return { projects: structuredClone(mockProjects), warning: '' };
-  } catch {
-    return { projects: structuredClone(mockProjects), warning: 'Nie udało się odczytać zapisu lokalnego. Wczytano dane przykładowe.' };
-  }
-}
-
-function reducer(state: History, action: Action): History {
-  if (action.type === 'opened') {
-    const touch = (projects: Project[]) => projects.map(project => project.id === action.id
-      ? { ...project, metadata: { ...project.metadata, last_opened_at: action.timestamp } } : project);
-    // Opening a document updates recents without consuming an editing undo step.
-    return { projects: touch(state.projects), past: state.past.map(touch), future: state.future.map(touch) };
-  }
-  if (action.type === 'undo') {
-    const previous = state.past.at(-1);
-    return previous ? { projects: previous, past: state.past.slice(0, -1), future: [state.projects, ...state.future] } : state;
-  }
-  if (action.type === 'redo') {
-    const next = state.future[0];
-    return next ? { projects: next, past: [...state.past, state.projects].slice(-50), future: state.future.slice(1) } : state;
-  }
-  const projects = action.update(state.projects);
-  return projects === state.projects ? state : { projects, past: [...state.past, state.projects].slice(-50), future: [] };
-}
-
-export function useWorkspace() {
-  const [initial] = useState(loadWorkspace);
-  const [state, dispatch] = useReducer(reducer, { projects: initial.projects, past: [], future: [] });
-  const [saveState, setSaveState] = useState<'saving' | 'saved' | 'error'>('saving');
-  useEffect(() => {
-    setSaveState('saving');
-    const timer = setTimeout(() => {
-      try { localStorage.setItem(storageKey, JSON.stringify(state.projects)); setSaveState('saved'); }
-      catch { setSaveState('error'); }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [state.projects]);
-  useEffect(() => {
-    const flush = () => { try { localStorage.setItem(storageKey, JSON.stringify(state.projects)); } catch { /* The status bar reports storage failures. */ } };
-    window.addEventListener('pagehide', flush);
-    return () => window.removeEventListener('pagehide', flush);
-  }, [state.projects]);
-  const updateProject = useCallback((id: string, update: (project: Project) => Project) => {
-    dispatch({ type: 'change', update: projects => projects.map(project => project.id === id ? update(project) : project) });
-  }, []);
-  const markProjectOpened = useCallback((id: string) => {
-    dispatch({ type: 'opened', id, timestamp: new Date().toISOString() });
-  }, []);
   return {
-    projects: state.projects, saveState, warning: initial.warning, updateProject, markProjectOpened,
-    addProject: (project: Project) => dispatch({ type: 'change', update: projects => [...projects, project] }),
-    removeProject: (id: string) => dispatch({ type: 'change', update: projects => projects.filter(project => project.id !== id) }),
-    undo: () => dispatch({ type: 'undo' }), redo: () => dispatch({ type: 'redo' }),
-    canUndo: state.past.length > 0, canRedo: state.future.length > 0,
+    projects, loading, loadError, error, saveState, mutating, historyVersion, flush, reloadProject,
+    retry: () => { if (pending.current.size) void flush().catch(() => undefined); else setVersion(value => value + 1); },
+    updateScene: draftScene,
+    canUndo: (sceneId?: string) => !!sceneId && !!past.current.get(sceneId)?.length,
+    canRedo: (sceneId?: string) => !!sceneId && !!future.current.get(sceneId)?.length,
+    undo: (sceneId: string) => {
+      const previous = past.current.get(sceneId)?.pop();
+      const scene = current.current.flatMap(project => project.scenes).find(item => item.id === sceneId);
+      if (previous && scene) { future.current.set(sceneId, [scene, ...(future.current.get(sceneId) ?? [])]); draftScene(previous, false); }
+    },
+    redo: (sceneId: string) => {
+      const next = future.current.get(sceneId)?.shift();
+      const scene = current.current.flatMap(project => project.scenes).find(item => item.id === sceneId);
+      if (next && scene) { past.current.set(sceneId, [...(past.current.get(sceneId) ?? []), scene]); draftScene(next, false); }
+    },
+    createProject: (details: CreateProjectInput) => mutate(async () => {
+      const saved = await api.projects.create(details);
+      return reloadProject(String(saved.id));
+    }),
+    editProject: (projectId: string, details: CreateProjectInput) => mutate(async () => {
+      await api.projects.update(Number(projectId), details); await reloadProject(projectId);
+    }),
+    projectAction: (projectId: string, action: ProjectAction) => mutate(async () => {
+      const saved = await api.projects.action(Number(projectId), action);
+      replace(current.current.map(project => project.id === projectId ? { ...project, metadata: saved.metadata } : project));
+    }),
+    removeProject: (projectId: string) => mutate(async () => {
+      await api.projects.delete(Number(projectId)); replace(current.current.filter(project => project.id !== projectId));
+    }),
+    addAct: (projectId: string) => mutate(async () => {
+      const project = projectById(projectId);
+      await api.acts.create(Number(projectId), { act_number: Math.max(0, ...project.acts.map(act => act.act_number)) + 1, sort_order: project.acts.length });
+      await reloadProject(projectId);
+    }),
+    editAct: (projectId: string, act: Act) => mutate(async () => {
+      await api.acts.update(Number(act.id), { title: act.title, summary: act.summary }); await reloadProject(projectId);
+    }),
+    removeAct: (projectId: string, act: Act) => mutate(async () => {
+      const project = projectById(projectId);
+      if (project.scenes.some(scene => scene.act === act.act_number)) throw new Error('Przenieś lub usuń sceny przed usunięciem aktu.');
+      await api.acts.delete(Number(act.id)); await reloadProject(projectId);
+    }),
+    addScene: (projectId: string, actNumber: number) => mutate(async () => {
+      const project = projectById(projectId);
+      const act = project.acts.find(item => item.act_number === actNumber);
+      if (!act) throw new Error('Nie znaleziono aktu.');
+      const saved = await api.scenes.create(Number(projectId), {
+        act_id: Number(act.id), scene_number: Math.max(0, ...project.scenes.map(scene => scene.scene_number)) + 1,
+        sort_order: project.scenes.filter(scene => scene.act === actNumber).length, title: 'Nowa scena',
+      });
+      await reloadProject(projectId); return String(saved.id);
+    }),
+    removeScene: (projectId: string, sceneId: string) => mutate(async () => {
+      await api.scenes.delete(Number(sceneId)); past.current.delete(sceneId); future.current.delete(sceneId);
+      await reloadProject(projectId);
+    }),
+    moveScene: (projectId: string, sceneId: string, actNumber: number) => mutate(async () => {
+      const project = projectById(projectId);
+      const act = project.acts.find(item => item.act_number === actNumber);
+      if (!act) throw new Error('Nie znaleziono aktu.');
+      await api.scenes.update(Number(sceneId), { act_id: Number(act.id), sort_order: project.scenes.filter(scene => scene.act === actNumber).length });
+      await reloadProject(projectId);
+    }),
+    reorderScenes: (projectId: string, scenes: Scene[]) => mutate(async () => {
+      for (let index = 0; index < scenes.length; index++) await api.scenes.update(Number(scenes[index].id), { sort_order: index });
+      await reloadProject(projectId);
+    }),
+    saveCharacter: (projectId: string, character: Character) => mutate(async () => {
+      const data = {
+        name: character.name, age: character.age === '' ? null : Number(character.age), role: character.role,
+        appearance: character.appearance, backstory: character.backstory, goals: character.goal,
+        psychological_profile: character.flaw, voice_profile: { ...character.voice_profile, description: character.voice },
+      };
+      if (character.id) await api.characters.update(Number(character.id), data);
+      else await api.characters.create(Number(projectId), data);
+      await reloadProject(projectId);
+    }),
+    removeCharacter: (projectId: string, characterId: string) => mutate(async () => {
+      await api.characters.delete(Number(characterId)); await reloadProject(projectId);
+    }),
+    applyVariant: (projectId: string, variantId: number) => mutate(async () => {
+      await api.variants.select(variantId, { apply_to_scene: true });
+      const project = await reloadProject(projectId);
+      for (const scene of project.scenes) { past.current.delete(scene.id); future.current.delete(scene.id); }
+      return project;
+    }),
   };
 }

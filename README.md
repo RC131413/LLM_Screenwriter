@@ -216,9 +216,8 @@ standard `detail` list. Unknown input fields are rejected.
 See [Ninja authentication](https://django-ninja.dev/guide/authentication/) and
 [CSRF](https://django-ninja.dev/guide/csrf/).
 
-The frontend still uses its existing mocks; it has not been connected to these
-routes. For future integration, use a same-origin development proxy or explicitly
-configure allowed CORS/CSRF origins; permissive cross-origin access is not enabled.
+The frontend still uses its existing mocks; its screens have not been connected
+to these routes. Cross-origin requests are configured as described below.
 No database model changes or new migrations are needed for this API.
 
 Tests (Django creates and removes a separate PostgreSQL test database):
@@ -229,3 +228,78 @@ Tests (Django creates and removes a separate PostgreSQL test database):
 
 Rebuild the Docker setup image after installing these new dependencies:
 `docker compose build db_setup`.
+
+## React, CORS and Cookies
+
+`django-cors-headers` is installed and registered. `CorsMiddleware` runs before
+response-generating middleware and adds CORS headers only for `/api` paths.
+Credentials are enabled, but only exact allowed origins are accepted; wildcard
+access is disabled. Default request headers include `Content-Type` and
+`X-CSRFToken`, and OPTIONS preflight allows GET/POST/PUT/PATCH/DELETE.
+See the [package documentation](https://pypi.org/project/django-cors-headers/).
+
+Local `.env` and `.env.example` configure both `CORS_ALLOWED_ORIGINS` and
+`CSRF_TRUSTED_ORIGINS` for HTTP on `127.0.0.1` and `localhost`, ports 5173, 5174
+and 4173 (Vite dev, fallback dev port and preview). Lists are comma-separated
+origins with scheme and port, without paths or trailing slashes. Add an exact
+origin to these lists if using another port, then restart Django.
+When these environment variables are absent, DEBUG mode supplies the local list;
+non-DEBUG mode defaults to no allowed origins. CSRF trust defaults to the CORS
+list, but can be configured separately. An empty variable explicitly clears its list.
+
+Use **the same hostname** on both sides, for example:
+
+- Frontend: `http://127.0.0.1:5173`, API: `http://127.0.0.1:8000/api`.
+- Or frontend: `http://localhost:5173`, API: `http://localhost:8000/api`.
+
+Do not mix `localhost` and `127.0.0.1` for local HTTP session authentication:
+they are different sites, and allowing CORS cannot override cookie SameSite rules.
+Local cookies use `SameSite=Lax`; different ports on the same host work with this.
+Session cookies stay HttpOnly and host-only. CSRF tokens can be read from the
+existing `/api/auth/csrf` JSON response, so React need not read a different host's
+cookies. The CSRF bootstrap response is marked `Cache-Control: no-store`.
+
+Minimal React/browser fetch sequence (no frontend screens were changed):
+
+```javascript
+const api = 'http://127.0.0.1:8000/api';
+
+async function csrfToken() {
+  const response = await fetch(`${api}/auth/csrf`, {
+    credentials: 'include', cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`CSRF request failed: ${response.status}`);
+  return (await response.json()).csrf_token;
+}
+
+let token = await csrfToken();
+const login = await fetch(`${api}/auth/login`, {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+  body: JSON.stringify({ identifier: 'your username or email', password: 'your password' }),
+});
+if (!login.ok) throw new Error(`Login failed: ${login.status}`);
+
+token = await csrfToken(); // Login/register rotates the token; use this for subsequent writes.
+const account = await fetch(`${api}/users/me`, { credentials: 'include' });
+if (!account.ok) throw new Error(`Account request failed: ${account.status}`);
+```
+
+Every POST/PUT/PATCH/DELETE must use the current `X-CSRFToken` and
+`credentials: 'include'`; GETs and the CSRF bootstrap must include credentials
+too. Do not use `mode: 'no-cors'`, disable CSRF, or try to read `Set-Cookie` in JS.
+CORS permission does not bypass login or CSRF validation.
+
+For HTTPS deployment, replace the local allowlists with actual trusted frontend
+origins. `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` default to True when
+`DJANGO_DEBUG=False`, and False during local debug; explicit environment values
+override these defaults. Prefer serving frontend/API on the same site. If they
+must use different sites, set both `SESSION_COOKIE_SAMESITE=None` and
+`CSRF_COOKIE_SAMESITE=None`, with both secure flags True and HTTPS. Invalid
+SameSite values and SameSite=None without Secure fail at startup. Browsers may
+still block third-party cookies independently of CORS, so a same-site deployment
+or reverse proxy is more reliable. See [Django cookie settings](https://docs.djangoproject.com/en/6.1/ref/settings/#session-cookie-samesite).
+
+CORS integration and credential tests are in `backend/api/test_cors.py` and run
+with the rest of the backend test suite. No migrations are required.

@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncDate
+from django.http import HttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -45,7 +46,8 @@ def integrity_error(request, error):
 
 
 @api.get('/auth/csrf', auth=None, response=s.CsrfOut, tags=['Authentication'])
-def csrf_token(request):
+def csrf_token(request, response: HttpResponse):
+    response['Cache-Control'] = 'no-store'
     return {'csrf_token': get_token(request)}
 
 

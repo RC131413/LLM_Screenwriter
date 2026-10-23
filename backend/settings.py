@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+from corsheaders.defaults import default_headers, default_methods
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -28,6 +29,29 @@ def required_env(name):
         raise ImproperlyConfigured(
             f'Missing {name}. Create a .env file using .env.example.'
         )
+    return value
+
+
+def env_list(name, default=()):
+    value = os.environ.get(name)
+    if value is None:
+        return list(default)
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def env_bool(name, default):
+    value = os.environ.get(name, str(default)).lower()
+    if value not in {'true', 'false', '1', '0', 'yes', 'no'}:
+        raise ImproperlyConfigured(f'{name} must be a boolean value.')
+    return value in {'true', '1', 'yes'}
+
+
+def cookie_same_site(name, secure):
+    value = os.environ.get(name, 'Lax')
+    if value not in {'Lax', 'Strict', 'None'}:
+        raise ImproperlyConfigured(f'{name} must be Lax, Strict or None.')
+    if value == 'None' and not secure:
+        raise ImproperlyConfigured(f'{name}=None requires the corresponding COOKIE_SECURE=True.')
     return value
 
 
@@ -46,6 +70,27 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Different local ports are cross-origin but remain same-site on the same host.
+LOCAL_FRONTEND_ORIGINS = [
+    f'http://{host}:{port}'
+    for host in ('127.0.0.1', 'localhost')
+    for port in (5173, 5174, 4173)
+] if DEBUG else []
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', LOCAL_FRONTEND_ORIGINS)
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', CORS_ALLOWED_ORIGINS)
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
+CORS_URLS_REGEX = r'^/api(?:/|$)'
+CORS_ALLOW_HEADERS = list(default_headers)  # Includes content-type and x-csrftoken.
+CORS_ALLOW_METHODS = list(default_methods)
+
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
+SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', not DEBUG)
+SESSION_COOKIE_SAMESITE = cookie_same_site('SESSION_COOKIE_SAMESITE', SESSION_COOKIE_SECURE)
+CSRF_COOKIE_SAMESITE = cookie_same_site('CSRF_COOKIE_SAMESITE', CSRF_COOKIE_SECURE)
+
 
 # Application definition
 
@@ -56,6 +101,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'backend.api.apps.ApiConfig',
 ]
 
@@ -67,6 +113,7 @@ NINJA_PAGINATION_MAX_LIMIT = 100
 NINJA_NUM_PROXIES = 0
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

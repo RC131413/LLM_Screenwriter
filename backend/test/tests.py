@@ -17,7 +17,7 @@ from django.db.migrations.state import ProjectState
 from django.db.migrations.writer import MigrationWriter
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from .models import (
+from backend.api.models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User, UserProfile,
 )

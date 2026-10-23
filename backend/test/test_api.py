@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 
-from .models import (
+from backend.api.models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User, UserProfile,
 )

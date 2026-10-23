@@ -6,6 +6,7 @@
 - `backend/`: Django settings, URLs, ASGI and WSGI entry points.
 - `backend/api/`: Django application registered as `backend.api.apps.ApiConfig`;
   contains models corresponding to the database ERD.
+- `backend/test/`: model, demo seeding, API and CORS tests.
 - `ERD/DB_diagram_ERD.png`: original database diagram.
 - `manage.py`, `venv/`, `requirements.txt`: kept in the repository root.
 - `compose.yaml`: PostgreSQL, its persistent volume, and the one-off `db_setup` service.
@@ -133,7 +134,7 @@ Implementation:
 - `backend/api/api.py`: routes, session authentication and HTTP responses.
 - `backend/api/scheams.py`: typed request/response contracts (requested filename).
 - `backend/api/services.py`: ownership checks, validated saves and context snapshots.
-- `backend/api/test_api.py`: HTTP, CSRF, authorization and workflow tests.
+- `backend/test/test_api.py`: HTTP, CSRF, authorization and workflow tests.
 - `backend/urls.py`: mounts the API at `/api/`.
 
 Paths below are relative to `/api` and do not have trailing slashes:
@@ -223,7 +224,7 @@ No database model changes or new migrations are needed for this API.
 Tests (Django creates and removes a separate PostgreSQL test database):
 
 ```powershell
-.\venv\Scripts\python.exe manage.py test backend.api
+.\venv\Scripts\python.exe manage.py test backend.test
 ```
 
 Rebuild the Docker setup image after installing these new dependencies:
@@ -301,5 +302,5 @@ SameSite values and SameSite=None without Secure fail at startup. Browsers may
 still block third-party cookies independently of CORS, so a same-site deployment
 or reverse proxy is more reliable. See [Django cookie settings](https://docs.djangoproject.com/en/6.1/ref/settings/#session-cookie-samesite).
 
-CORS integration and credential tests are in `backend/api/test_cors.py` and run
+CORS integration and credential tests are in `backend/test/test_cors.py` and run
 with the rest of the backend test suite. No migrations are required.

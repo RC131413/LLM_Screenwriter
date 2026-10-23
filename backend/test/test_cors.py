@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 
-from .models import User
+from backend.api.models import User
 
 
 FRONTEND_ORIGINS = [

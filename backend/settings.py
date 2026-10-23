@@ -61,6 +61,11 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = 'api.User'
 
+NINJA_PAGINATION_PER_PAGE = 20
+NINJA_PAGINATION_MAX_LIMIT = 100
+# Local development is direct; do not trust arbitrary X-Forwarded-For headers.
+NINJA_NUM_PROXIES = 0
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

@@ -245,6 +245,14 @@ scenes are moved or removed. No domain data is loaded from or saved to localStor
 `frontend/src/services/workspaceData.ts` maps API DTOs to editor view models,
 preserving JSON metadata and server IDs. Editor blocks live in `editor_metadata`,
 scene goals/notes in `ai_metadata`, and cast membership in `SceneCharacter`.
+The editor's labeled heading field displays a complete heading such as
+`WN. DOM - RANO`. `sceneHeading.ts` separates recognized Polish/English time labels
+from the location when saving (`location_heading: "WN. DOM"`, `time_of_day: "RANO"`)
+and joins them when loading. Hyphens in locations are preserved, and removing the
+time or the entire heading clears the corresponding saved fields. Legacy records
+with the full heading in `location_heading` are supported without duplicating the
+time; existing custom time labels from the API are preserved. Records are normalized
+through ordinary editor saves, without a bulk data rewrite or schema migration.
 `usePromptHistory.ts` reads and saves scene-specific history through the API.
 The assistant reads actual stored runs, agent executions and variants. Saving a
 prompt does not claim to generate text: no LLM worker is connected yet. Choosing

@@ -158,3 +158,20 @@ class WorkspaceFlowTests(TestCase):
         stored = self.request('get', f'/scenes/{scene["id"]}')
         self.assertEqual(stored['content_text'], before['content_text'])
         self.assertEqual(stored['editor_metadata'], before['editor_metadata'])
+
+    def test_separate_location_and_time_survive_login_and_can_be_cleared(self):
+        _, _, scene, _ = self.create_workspace()
+        pk = scene['id']
+        self.request('patch', f'/scenes/{pk}', {
+            'location_heading': 'PC. DOM', 'time_of_day': 'RANO', 'content_text': 'The letter falls.',
+        })
+        self.login_again()
+        stored = self.request('get', f'/scenes/{pk}')
+        self.assertEqual(stored['location_heading'], 'PC. DOM')
+        self.assertEqual(stored['time_of_day'], 'RANO')
+        self.assertEqual(stored['content_text'], 'The letter falls.')
+        self.request('patch', f'/scenes/{pk}', {'location_heading': '', 'time_of_day': ''})
+        record = Scene.objects.get(pk=pk)
+        self.assertEqual(record.location_heading, '')
+        self.assertEqual(record.time_of_day, '')
+        self.assertEqual(record.content_text, 'The letter falls.')

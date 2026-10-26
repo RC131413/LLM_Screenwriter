@@ -1,6 +1,7 @@
 import { ApiError } from './api';
 import type { ApiCharacter, ApiScene, ApiWorkspace, JsonObject, Page, PaginationParams, UpdateSceneInput } from './api';
 import type { BlockType, Character, Project, Scene, ScriptBlock } from '../types';
+import { formatSceneHeading, splitSceneHeading } from './sceneHeading';
 
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -43,7 +44,7 @@ export function toScene(scene: ApiScene, actNumber: number): Scene {
   const status = text(metadata.status);
   return {
     id: String(scene.id), scene_number: scene.scene_number, title: scene.title,
-    heading: scene.location_heading, act: actNumber,
+    heading: formatSceneHeading(scene.location_heading, scene.time_of_day), time_of_day: scene.time_of_day, act: actNumber,
     status: status === 'review' || status === 'ready' ? status : 'draft',
     synopsis: text(scene.ai_metadata.scene_goal), notes: text(scene.ai_metadata.notes),
     characterIds: scene.cast_members.map(member => String(member.character_id)),
@@ -76,7 +77,7 @@ export function toProject(workspace: ApiWorkspace): Project {
 
 export function scenePayload(scene: Scene): UpdateSceneInput {
   return {
-    title: scene.title, location_heading: scene.heading,
+    title: scene.title, ...splitSceneHeading(scene.heading, scene.time_of_day),
     content_text: scene.blocks.map(block => block.text).join('\n\n'),
     ai_metadata: { ...scene.ai_metadata, scene_goal: scene.synopsis, notes: scene.notes },
     editor_metadata: { ...scene.editor_metadata, status: scene.status, blocks: scene.blocks.map(block => ({ ...block })) },

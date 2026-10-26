@@ -8,6 +8,7 @@ export interface Scene {
   scene_number: number;
   title: string;
   heading: string;
+  time_of_day: string;
   act: number;
   status: SceneStatus;
   synopsis: string;

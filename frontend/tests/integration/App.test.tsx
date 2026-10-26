@@ -7,6 +7,34 @@ import { deferred, jsonResponse } from '../support/http';
 import { workspaceHttp } from '../support/workspaceHttp';
 
 describe('application → hooks → API client → HTTP', () => {
+  it('saves location and time separately from the visible heading field and restores them after remount', async () => {
+    const http = workspaceHttp((call, workspace) => {
+      if (call.path === '/users/me') return jsonResponse(userFixture());
+      if (call.path === '/users/me/preferences') return jsonResponse(preferencesFixture());
+      if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
+      if (['/scenes/20/prompts', '/scenes/20/runs', '/scenes/20/variants'].includes(call.path)) return jsonResponse({ items: [], count: 0 });
+      return undefined;
+    });
+    const mounted = render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('link', { name: 'Otwórz projekt Nocny pociąg' }));
+    const heading = await screen.findByLabelText('Nagłówek sceny');
+    expect(heading).toHaveAttribute('placeholder', 'Np. WN. DOM – RANO');
+    expect(heading).toHaveAccessibleDescription('Po myślniku wpisz porę dnia, np. RANO, DZIEŃ lub NOC.');
+    fireEvent.change(heading, { target: { value: 'PL. BIELSKO-BIAŁA – PRZYSTANEK – WIECZÓR' } });
+    await waitFor(() => expect(http.workspace.scenes[0]).toMatchObject({
+      location_heading: 'PL. BIELSKO-BIAŁA – PRZYSTANEK', time_of_day: 'WIECZÓR', content_text: 'ANNA czyta list.',
+    }), { timeout: 2500 });
+    const write = http.calls.find(call => call.method === 'PATCH')!;
+    expect(write.body).toMatchObject({ location_heading: 'PL. BIELSKO-BIAŁA – PRZYSTANEK', time_of_day: 'WIECZÓR' });
+    mounted.unmount();
+    render(<App />);
+    expect(await screen.findByLabelText('Nagłówek sceny')).toHaveValue('PL. BIELSKO-BIAŁA – PRZYSTANEK - WIECZÓR');
+    fireEvent.change(screen.getByLabelText('Nagłówek sceny'), { target: { value: '' } });
+    await waitFor(() => expect(http.workspace.scenes[0]).toMatchObject({ location_heading: '', time_of_day: '' }), { timeout: 2500 });
+    expect(screen.getByLabelText('Akcja 1')).toHaveValue('ANNA czyta list.');
+  });
+
   it('logs in, loads persistent dashboard data and logs out through the server', async () => {
     let authenticated = false;
     const http = workspaceHttp(call => {

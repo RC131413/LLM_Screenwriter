@@ -102,7 +102,14 @@ h1, h2, h3, p { margin: 0; }
 .script-page textarea { display: block; width: 100%; resize: none; border: 0; padding: 0; overflow: hidden; background: transparent; font-family: inherit; font-size: inherit; line-height: inherit; border-radius: 0; overflow-wrap: anywhere; }
 .script-page textarea:focus { outline: none; }
 .script-page textarea::placeholder { color: #b3b8bc; }
-.scene-heading { text-transform: uppercase; font-weight: 700; margin-bottom: 25px; }
+.scene-heading-field { margin-bottom: 25px; }
+.scene-heading-field > label { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font: 600 10px Inter, 'Segoe UI', sans-serif; color: #646f75; }
+.scene-heading-field > label svg { color: #87938c; }
+.script-page textarea.scene-heading { text-transform: uppercase; font-weight: 700; min-height: 45px; padding: 9px 11px; border: 1px solid #d6ddda; border-radius: 3px; background: #f4f6f5; margin: 0; }
+.script-page textarea.scene-heading:hover { border-color: #b4c1ba; }
+.script-page textarea.scene-heading:focus { border-color: #7e9a8b; background: #fff; outline: 1px solid #7e9a8b; outline-offset: 0; }
+.script-page textarea.scene-heading::placeholder { color: #89958e; font-weight: 400; text-transform: none; }
+.scene-heading-field > p { margin-top: 7px; font: 10px/1.5 Inter, 'Segoe UI', sans-serif; color: #7e888e; }
 .script-block { margin: 0 -7px 21px; padding: 0 7px; border-left: 2px solid transparent; }
 .script-block.focused { border-left-color: #c2d2c7; }
 .script-block.character { width: 64%; margin-left: 33%; margin-bottom: 0; text-transform: uppercase; }
@@ -538,7 +545,7 @@ h1, h2, h3, p { margin: 0; }
   .document-scroll { padding: 19px 12px 28px; }
   .script-page { padding: 48px 22px; min-height: 760px; line-height: 1.6; }
   .page-number { right: 24px; top: 20px; }
-  .scene-heading { margin-bottom: 22px; }
+  .scene-heading-field { margin-bottom: 22px; }
   .script-block { margin-bottom: 18px; }
   .script-block.dialogue { width: 83%; margin-left: 8%; }
   .script-block.parenthetical { width: 70%; margin-left: 20%; }

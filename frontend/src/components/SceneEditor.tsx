@@ -59,7 +59,11 @@ export function SceneEditor({ scene, sceneNumber, zoom, onChange, onDelete, undo
       <div className="document-sheet" style={{ zoom: zoom / 100 }}>
       <article className="script-page" aria-label="Edytor scenariusza">
         <div className="page-number">{sceneNumber}.</div>
-        <AutoTextarea className="scene-heading" aria-label="Nagłówek sceny" maxLength={255} spellCheck={false} value={scene.heading} onChange={event => onChange({ ...scene, heading: event.target.value })} onFocus={() => setFocusedId(undefined)} />
+        <div className="scene-heading-field">
+          <label htmlFor={`scene-heading-${scene.id}`}>Nagłówek sceny<Pencil size={12} aria-hidden="true" /></label>
+          <AutoTextarea id={`scene-heading-${scene.id}`} className="scene-heading" aria-describedby={`scene-heading-help-${scene.id}`} placeholder="Np. WN. DOM – RANO" maxLength={255} spellCheck={false} value={scene.heading} onChange={event => onChange({ ...scene, heading: event.target.value })} onFocus={() => setFocusedId(undefined)} />
+          <p id={`scene-heading-help-${scene.id}`}>Po myślniku wpisz porę dnia, np. RANO, DZIEŃ lub NOC.</p>
+        </div>
         {scene.blocks.map((block, index) => <div key={block.id} className={`script-block ${block.type} ${focusedId === block.id ? 'focused' : ''}`}>
           <AutoTextarea id={`block-${block.id}`} aria-label={`${blockLabels[block.type]} ${index + 1}`} spellCheck={false} value={block.text} placeholder={blockLabels[block.type]} onFocus={() => setFocusedId(block.id)} onChange={event => changeBlock(block.id, { text: event.target.value })} />
         </div>)}

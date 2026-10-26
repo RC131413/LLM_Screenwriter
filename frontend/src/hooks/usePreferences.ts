@@ -10,9 +10,8 @@ export function usePreferences(userId?: number) {
   const [version, setVersion] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setPreferences(null); setError('');
+    setPreferences(null); setError(''); setLoading(!!userId);
     if (!userId) return;
-    setLoading(true);
     void api.account.getPreferences({ signal: controller.signal }).then(value => {
       if (!controller.signal.aborted) setPreferences(value);
     }).catch(failure => { if (!controller.signal.aborted) setError(errorMessage(failure)); })

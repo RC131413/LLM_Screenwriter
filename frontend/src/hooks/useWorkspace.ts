@@ -19,6 +19,7 @@ export function useWorkspace(userId?: number) {
   const future = useRef(new Map<string, Scene[]>());
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const activeSaves = useRef(new Set<Promise<void>>());
   const jobs = useRef(0);
   const mutationCount = useRef(0);
   const epoch = useRef(0);
@@ -59,28 +60,32 @@ export function useWorkspace(userId?: number) {
     clearTimeout(timer.current);
     const drafts = [...pending.current.values()];
     pending.current.clear();
+    // Navigation/logout must observe failures of saves already in progress too.
+    const saves = [...activeSaves.current];
     if (drafts.length) {
-      try {
-        await enqueue(async () => {
-          for (const scene of drafts) {
-            const saved = await api.scenes.update(Number(scene.id), scenePayload(scene));
-            const desired = new Set(scene.characterIds);
-            for (const member of saved.cast_members) {
-              if (!desired.has(String(member.character_id))) await api.cast.delete(member.id);
-            }
-            const existing = new Set(saved.cast_members.map(member => String(member.character_id)));
-            for (const characterId of desired) {
-              if (!existing.has(characterId)) await api.cast.create(saved.id, { character_id: Number(characterId) });
-            }
+      const save = enqueue(async () => {
+        for (const scene of drafts) {
+          const saved = await api.scenes.update(Number(scene.id), scenePayload(scene));
+          const desired = new Set(scene.characterIds);
+          for (const member of saved.cast_members) {
+            if (!desired.has(String(member.character_id))) await api.cast.delete(member.id);
           }
-        });
-      } catch (failure) {
+          const existing = new Set(saved.cast_members.map(member => String(member.character_id)));
+          for (const characterId of desired) {
+            if (!existing.has(characterId)) await api.cast.create(saved.id, { character_id: Number(characterId) });
+          }
+        }
+      }).then(() => { activeSaves.current.delete(save); }, failure => {
+        activeSaves.current.delete(save);
         if (generation === epoch.current) {
           for (const scene of drafts) if (!pending.current.has(scene.id)) pending.current.set(scene.id, scene);
         }
         throw failure;
-      }
+      });
+      activeSaves.current.add(save);
+      saves.push(save);
     }
+    await Promise.all(saves);
     await queue.current;
   }, [enqueue]);
 

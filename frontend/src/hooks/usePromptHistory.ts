@@ -9,9 +9,9 @@ export function usePromptHistory(projectId: string, sceneId: string | undefined)
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);
   useEffect(() => {
-    setEntries([]); setError('');
+    setEntries([]); setError(''); setLoading(!!sceneId);
     if (!sceneId) return;
-    const controller = new AbortController(); setLoading(true);
+    const controller = new AbortController();
     void allPages(params => api.prompts.list(Number(sceneId), params, { signal: controller.signal }), controller.signal)
       .then(prompts => { if (!controller.signal.aborted) setEntries(prompts.map(prompt => ({
         id: String(prompt.id), project_id: projectId, scene_id: sceneId, prompt: prompt.user_prompt, created_at: prompt.created_at,

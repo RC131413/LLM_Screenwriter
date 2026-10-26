@@ -6,7 +6,9 @@
 - `backend/`: Django settings, URLs, ASGI and WSGI entry points.
 - `backend/api/`: Django application registered as `backend.api.apps.ApiConfig`;
   contains models corresponding to the database ERD.
-- `backend/test/`: model, demo seeding, API and CORS tests.
+- `backend/test/`: tests grouped by authentication, account, projects, structure,
+  characters, generation, permissions, models, seeding, CORS and workspace flows.
+- `frontend/tests/`: API transport, hooks, services, component and application integration tests.
 - `ERD/DB_diagram_ERD.png`: original database diagram.
 - `manage.py`, `venv/`, `requirements.txt`: kept in the repository root.
 - `compose.yaml`: PostgreSQL, its persistent volume, and the one-off `db_setup` service.
@@ -134,7 +136,8 @@ Implementation:
 - `backend/api/api.py`: routes, session authentication and HTTP responses.
 - `backend/api/scheams.py`: typed request/response contracts (requested filename).
 - `backend/api/services.py`: ownership checks, validated saves and context snapshots.
-- `backend/test/test_api.py`: HTTP, CSRF, authorization and workflow tests.
+- `backend/test/test_*.py`: HTTP, CSRF, authorization, model and workflow tests,
+  with shared API fixtures in `_api_base.py`.
 - `backend/urls.py`: mounts the API at `/api/`.
 
 Paths below are relative to `/api` and do not have trailing slashes:
@@ -252,11 +255,57 @@ The old static project data and AI simulator files have been removed. Existing
 database records, including data created by the optional seed command, remain
 ordinary persistent backend data; the frontend does not supply example records.
 
-Tests (Django creates and removes a separate PostgreSQL test database):
+### Tests
+
+Backend tests use Django's HTTP client, real session/CSRF middleware and PostgreSQL.
+Django creates and removes a separate test database; the configured database user
+must have permission to create it. Start PostgreSQL first; the Django and Vite
+development servers do not need to be running. Existing application records are
+not used or changed by these tests.
 
 ```powershell
 .\venv\Scripts\python.exe manage.py test backend.test
 ```
+
+The backend suite is divided into:
+
+- `test_auth.py`, `test_account.py`: sessions, registration, passwords, profile and preferences.
+- `test_projects.py`, `test_structure.py`, `test_characters.py`: project CRUD,
+  collections, acts, scenes, characters and cast relationships.
+- `test_generation.py`: prompts, context snapshots, runs and variants.
+- `test_permissions.py`, `test_api_contract.py`, `test_cors.py`: ownership,
+  validation, OpenAPI, cross-origin credentials and CSRF protection.
+- `test_models.py`, `test_seed.py`: ERD constraints, JSON defaults, cascades and seeding.
+- `test_workspace_flow.py`: complete editor payloads, dashboard actions, cast,
+  scene moves and prompt snapshots surviving logout and a fresh login.
+
+Frontend tests use Vitest, React Testing Library and jsdom. They run the actual
+components/hooks/API client and intercept fetch at the HTTP boundary with
+test-only DTOs. They do not require a running backend and do not contact the
+application database. These are automated frontend integration tests; testing
+cross-origin cookies in a real browser remains a separate end-to-end check.
+
+From `frontend/`:
+
+```powershell
+npm ci
+npm test
+npm run test:typecheck
+npm run build
+```
+
+`npm run test:watch` runs Vitest in watch mode. Test organization:
+
+- `tests/api/`: CSRF, transport failures, request options and all 51 API operations.
+- `tests/hooks/`: session restoration/expiry/logout, account preferences, profile,
+  project loading, debounced scene saves, cast, undo/redo, structure and prompt history.
+- `tests/services/`: DTO mapping, pagination, metadata preservation and error messages.
+- `tests/components/`: authentication/project/preferences forms and prompt history UI.
+- `tests/integration/`: complete App flows, including failed autosave blocking logout.
+- `tests/support/`: isolated HTTP interception, test DTOs and deferred responses.
+
+To run only one area: `npm test -- tests/hooks/useWorkspace.test.ts`, or from the
+repository root: `.\venv\Scripts\python.exe manage.py test backend.test.test_auth`.
 
 Rebuild the Docker setup image after installing these new dependencies:
 `docker compose build db_setup`.

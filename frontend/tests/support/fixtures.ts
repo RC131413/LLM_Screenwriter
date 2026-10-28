@@ -1,4 +1,4 @@
-import type { ApiCharacter, ApiPreferences, ApiPrompt, ApiUser, ApiWorkspace } from '../../src/services/api';
+import type { ApiCharacter, ApiPreferences, ApiPrompt, ApiSceneVariant, ApiUser, ApiWorkspace } from '../../src/services/api';
 
 // Test-only DTOs: runtime components never import this module.
 export const timestamp = '2026-10-20T12:00:00Z';
@@ -58,5 +58,13 @@ export function promptFixture(sceneId = 20, id = 50): ApiPrompt {
   return {
     id, scene_id: sceneId, user_prompt: `Prompt dla sceny ${sceneId}`, system_prompt: '', context_snapshot: {},
     model_name: 'Bielik 11B (Lokalny)', generation_parameters: {}, created_at: timestamp,
+  };
+}
+
+export function variantFixture(sceneId = 20, id = 70): ApiSceneVariant {
+  return {
+    id, run_id: 60, scene_id: sceneId, variant_number: 1, title: 'Wariant Bielika',
+    generated_full_text: 'ANNA\n\nZnalazłam list.', critic_score: null, critic_feedback: '', critic_metadata: {},
+    is_selected: false, created_at: timestamp,
   };
 }

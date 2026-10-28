@@ -47,6 +47,7 @@ const endpointCases = [
   ['DELETE', 'cast/5', () => api.cast.delete(5)],
   ['GET', 'scenes/3/prompts', () => api.prompts.list(3)],
   ['POST', 'scenes/3/prompts', () => api.prompts.create(3, { user_prompt: 'A quiet scene' })],
+  ['POST', 'scenes/3/generate', () => api.scenes.generate(3, { user_prompt: 'A quiet scene' })],
   ['GET', 'prompts/6', () => api.prompts.get(6)],
   ['GET', 'prompts/6/run', () => api.prompts.getRun(6)],
   ['GET', 'scenes/3/runs', () => api.runs.list(3)],
@@ -59,7 +60,7 @@ const endpointCases = [
   ['POST', 'variants/9/select', () => api.variants.select(9, { apply_to_scene: true })],
 ];
 
-test('covers all 51 generated operations', () => assert.equal(endpointCases.length, 51));
+test('covers all 52 generated operations', () => assert.equal(endpointCases.length, 52));
 for (const [method, path, call] of endpointCases) {
   test(method + ' ' + path, async () => {
     transport.handler = async (url, init) => init.method === 'DELETE'

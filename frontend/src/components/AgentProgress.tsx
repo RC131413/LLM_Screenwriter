@@ -11,11 +11,11 @@ export function AgentProgress({ run }: { run: ApiRunDetail | null }) {
     <div className="progress-heading"><span role="status">{run.status === 'completed' ? 'Zakończony' : run.status === 'failed' ? 'Błąd generowania' : running ? 'W trakcie' : run.status}</span><span>{percent}%</span></div>
     <progress className="generation-progress" aria-label="Postęp generowania" max={100} value={running && !agents.length ? undefined : percent} />
     {run.error_message && <p className="form-error" role="alert">{run.error_message}</p>}
-    <details className="agent-details"><summary><span>Szczegóły agentów</span><ChevronDown size={14} /></summary><ol className="agent-list">
+    {agents.length > 0 && <details className="agent-details"><summary><span>Szczegóły agentów</span><ChevronDown size={14} /></summary><ol className="agent-list">
       {agents.map((agent, index) => <li key={agent.id} className={agent.status === 'running' ? 'active' : ''}>
         <span className="agent-icon">{agent.status === 'completed' ? <Check size={14} /> : agent.status === 'running' ? <LoaderCircle size={14} className="spin" /> : <Circle size={12} />}</span>
         <div><strong>{agent.agent_name}</strong><small>{agent.node_name} · {agent.status}{agent.duration_ms !== null && ` · ${agent.duration_ms} ms`}</small>{agent.error_message && <small>{agent.error_message}</small>}</div><span className="agent-order">{String(index + 1).padStart(2, '0')}</span>
       </li>)}
-    </ol></details>
+    </ol></details>}
   </section>;
 }

@@ -2,11 +2,40 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from '../../src/App';
-import { preferencesFixture, userFixture } from '../support/fixtures';
+import { preferencesFixture, userFixture, variantFixture } from '../support/fixtures';
 import { deferred, jsonResponse } from '../support/http';
 import { workspaceHttp } from '../support/workspaceHttp';
 
 describe('application → hooks → API client → HTTP', () => {
+  it('flushes the latest editor content before sending the prompt and displays the model result', async () => {
+    let generated = false;
+    let sourceText = '';
+    const http = workspaceHttp((call, workspace) => {
+      if (call.path === '/users/me') return jsonResponse(userFixture());
+      if (call.path === '/users/me/preferences') return jsonResponse(preferencesFixture());
+      if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
+      if (call.path === '/scenes/20/generate') {
+        sourceText = workspace.scenes[0].content_text; generated = true;
+        return jsonResponse(variantFixture(), 201);
+      }
+      if (call.path === '/scenes/20/variants') return jsonResponse({ items: generated ? [variantFixture()] : [], count: generated ? 1 : 0 });
+      if (['/scenes/20/prompts', '/scenes/20/runs'].includes(call.path)) return jsonResponse({ items: [], count: 0 });
+      return undefined;
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('link', { name: 'Otwórz projekt Nocny pociąg' }));
+    fireEvent.change(await screen.findByLabelText('Akcja 1'), { target: { value: 'Najnowszy tekst sceny.' } });
+    await user.type(screen.getByLabelText('Kierunek sceny'), 'Dodaj dialog');
+    await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
+    expect(await screen.findByRole('region', { name: 'Wynik generowania' })).toHaveTextContent('Znalazłam list.');
+    expect(sourceText).toBe('Najnowszy tekst sceny.');
+    const writes = http.calls.filter(call => call.path === '/scenes/20' || call.path === '/scenes/20/generate');
+    expect(writes.map(call => [call.method, call.path])).toEqual([['PATCH', '/scenes/20'], ['POST', '/scenes/20/generate']]);
+    expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog' });
+    expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
+  });
+
   it('saves location and time separately from the visible heading field and restores them after remount', async () => {
     const http = workspaceHttp((call, workspace) => {
       if (call.path === '/users/me') return jsonResponse(userFixture());

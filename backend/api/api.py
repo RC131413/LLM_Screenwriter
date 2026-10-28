@@ -1,9 +1,9 @@
 """Session-authenticated AgentDraft API. Engine-produced records are read-only."""
 
 from datetime import timedelta
+from time import perf_counter
 from typing import Literal
 
-from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -29,8 +29,9 @@ from .models import (
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
 )
 from .services import (
+    SCENE_GENERATION_SYSTEM_PROMPT,
     get_owned, lock_project, owned, profile_for, prompt_snapshot,
-    save_validated, validate_avatar,
+    save_validated, scene_generation_prompt, validate_avatar,
 )
 
 
@@ -52,21 +53,6 @@ def integrity_error(request, error):
 def csrf_token(request, response: HttpResponse):
     response['Cache-Control'] = 'no-store'
     return {'csrf_token': get_token(request)}
-
-
-@api.get('/llm/ping', auth=None,
-         response={200: s.LlmPingOut, 404: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut},
-         tags=['LLM'])
-def llm_ping(request, response: HttpResponse):
-    """Temporary development-only probe; each call performs a real generation."""
-    response['Cache-Control'] = 'no-store'
-    if not settings.DEBUG:
-        return 404, {'detail': 'Not found.'}
-    try:
-        answer = ollama.generate('Odpowiedz jednym krótkim zdaniem po polsku: czy połączenie z modelem Bielik działa?')
-    except ollama.OllamaError as error:
-        return error.status_code, {'detail': str(error)}
-    return {'model': ollama.OLLAMA_MODEL, 'response': answer}
 
 
 @api.post('/auth/register', auth=None, response={201: s.UserOut},
@@ -447,9 +433,13 @@ def list_prompts(request, scene_id: s.PositiveId):
 
 
 @api.post('/scenes/{scene_id}/prompts', response={201: s.PromptOut}, tags=['Prompt history'])
-@transaction.atomic
 def create_prompt(request, scene_id: s.PositiveId, payload: s.PromptIn):
     """Save an immutable prompt and context. Does not start an LLM or create a fake run."""
+    return 201, _create_prompt(request, scene_id, payload)
+
+
+@transaction.atomic
+def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', system_prompt=''):
     scene = get_owned(Scene, request.auth, scene_id)
     lock_project(request.auth, scene.project_id)
     scene = get_object_or_404(owned(Scene, request.auth).select_related('project', 'act'), pk=scene_id)
@@ -463,9 +453,46 @@ def create_prompt(request, scene_id: s.PositiveId, payload: s.PromptIn):
     prompt = SceneGenerationRequest(
         scene=scene, user_prompt=payload.user_prompt,
         context_snapshot=prompt_snapshot(scene, profile),
-        model_name='Bielik 11B', generation_parameters=parameters.model_dump(),
+        model_name=model_name, system_prompt=system_prompt, generation_parameters=parameters.model_dump(),
     )
-    return 201, save_validated(prompt)
+    return save_validated(prompt)
+
+
+@api.post('/scenes/{scene_id}/generate',
+          response={201: s.VariantOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
+def generate_scene(request, scene_id: s.PositiveId, payload: s.PromptIn, response: HttpResponse):
+    """One synchronous Ollama call, backed by existing history/run/variant records."""
+    response['Cache-Control'] = 'no-store'
+    if not payload.user_prompt.strip():
+        raise ValidationError({'user_prompt': 'Wpisz instrukcję dla modelu.'})
+    prompt = _create_prompt(
+        request, scene_id, payload, model_name=ollama.OLLAMA_MODEL,
+        system_prompt=SCENE_GENERATION_SYSTEM_PROMPT,
+    )
+    run = save_validated(GenerationRun(request=prompt, status='running', started_at=timezone.now()))
+    started = perf_counter()
+    # No database transaction or row lock is held during the slow HTTP request.
+    try:
+        answer = ollama.generate(scene_generation_prompt(prompt), **prompt.generation_parameters)
+    except ollama.OllamaError as error:
+        finished = timezone.now()
+        GenerationRun.objects.filter(pk=run.pk).update(
+            status='failed', finished_at=finished, updated_at=finished,
+            total_duration_ms=int((perf_counter() - started) * 1000), error_message=str(error),
+        )
+        return error.status_code, {'detail': str(error)}
+    with transaction.atomic():
+        # A scene can have been deleted while Ollama was generating its response.
+        run = get_object_or_404(GenerationRun.objects.select_for_update(), pk=run.pk)
+        variant = save_validated(SceneVariant(
+            run=run, scene_id=prompt.scene_id, variant_number=1,
+            title='Wariant Bielika', generated_full_text=answer,
+        ))
+        save_validated(run, {
+            'status': 'completed', 'finished_at': timezone.now(),
+            'total_duration_ms': int((perf_counter() - started) * 1000),
+        })
+    return 201, variant
 
 
 @api.get('/prompts/{prompt_id}', response=s.PromptOut, tags=['Prompt history'])

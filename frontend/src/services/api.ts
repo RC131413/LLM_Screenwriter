@@ -443,6 +443,8 @@ export const charactersApi = {
 };
 
 export const scenesApi = {
+  generate: (sceneId: ApiId, data: CreatePromptInput, options: CallOptions = {}) =>
+    apiRequest<ApiSceneVariant>(`scenes/${id(sceneId)}/generate`, { ...options, method: 'POST', body: data }),
   list: (projectId: ApiId, params: SceneListParams = {}, options: CallOptions = {}) =>
     apiRequest<Page<ApiScene>>(`projects/${id(projectId)}/scenes`, { ...options, query: { ...params } }),
   create: (projectId: ApiId, data: CreateSceneInput, options: CallOptions = {}) =>

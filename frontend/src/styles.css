@@ -611,6 +611,8 @@ h1, h2, h3, p { margin: 0; }
 body > #root > .request-state { min-height: 100vh; }
 .request-state p { max-width: 580px; overflow-wrap: anywhere; }
 .variant-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 12pt 'Courier New', monospace; }
+.generation-message { margin-top: 10px; color: var(--muted); }
+.generated-scene-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow-y: auto; margin: 0; padding: 12px; background: #f7f8f8; border: 1px solid var(--border); border-radius: 3px; font: 12px/1.7 'Courier New', Courier, monospace; }
 .account-fields > div { min-width: 0; }
 .form-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .modal-error { margin: 16px 24px; }

@@ -16,7 +16,8 @@ class OllamaError(RuntimeError):
         self.status_code = status_code
 
 
-def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = OLLAMA_TIMEOUT) -> str:
+def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = OLLAMA_TIMEOUT,
+             temperature: float = 0.7, max_tokens: int = 128) -> str:
     """Send a prompt to the fixed Bielik model and return its completed text."""
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError('Prompt musi być niepustym tekstem.')
@@ -24,7 +25,7 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
         'model': OLLAMA_MODEL,
         'prompt': prompt,
         'stream': False,
-        'options': {'num_predict': 128},
+        'options': {'num_predict': max_tokens, 'temperature': temperature},
     }
     request = Request(
         base_url.rstrip('/') + '/api/generate',

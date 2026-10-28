@@ -25,11 +25,6 @@ class CsrfOut(Schema):
     csrf_token: str
 
 
-class LlmPingOut(Schema):
-    model: str
-    response: str
-
-
 class RegisterIn(InputSchema):
     username: str = Field(min_length=1, max_length=150)
     email: EmailStr = Field(max_length=254)

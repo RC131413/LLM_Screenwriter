@@ -131,7 +131,9 @@ running it again: `docker compose up -d --build db_setup`.
 
 `backend/ollama.py` exposes `generate(prompt: str) -> str`. It sends UTF-8 JSON to
 `http://127.0.0.1:11434/api/generate` using Python's standard library, with
-`stream: false`, a 120-second timeout and a 128-token output limit for this MVP.
+`stream: false` and a 120-second timeout. Optional `temperature` and `max_tokens`
+keyword arguments control generation. The scene endpoint uses saved AI preferences
+(by default temperature 0.7 and 2048 output tokens), unless the request overrides them.
 The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
 Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
 The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
@@ -142,23 +144,40 @@ With Ollama installed and running, download the model once:
 ollama pull SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M
 ```
 
-Start Django normally and test in a browser or PowerShell:
+Start Django and the frontend normally, log in, open a scene, enter an instruction
+under "Kierunek sceny" and click "Generuj scenę". The editor first flushes pending
+scene/cast changes, then calls the session/CSRF-protected endpoint:
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/llm/ping
+```http
+POST /api/scenes/{scene_id}/generate
+Content-Type: application/json
+X-CSRFToken: <current CSRF token>
+
+{"user_prompt": "Dodaj krótki dialog o odnalezionym liście."}
 ```
 
-`GET /api/llm/ping` sends a fixed Polish test prompt and returns
-`{ "model": "SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M", "response": "..." }`.
-This temporary diagnostic endpoint requires `DJANGO_DEBUG=True` and does not
-require login. With DEBUG disabled it returns 404 without contacting Ollama.
-Each request generates fresh text; responses have `Cache-Control: no-store`.
+The server verifies scene ownership and reads its current text and heading from
+PostgreSQL. It freezes a context snapshot, combines the scene with `user_prompt`
+and sends one direct request to Ollama. The browser cannot override the model or
+provide a replacement scene context. Optional `generation_parameters` accepts
+`temperature` and `max_tokens`. No database lock is held while waiting for Ollama.
+
+The endpoint returns HTTP 201 with a `VariantOut` object, including the generated
+text in `generated_full_text`. Prompt history, a real `GenerationRun` and its
+`SceneVariant` are persisted using the existing ERD tables. Runs are marked
+`completed` or `failed`, with timing and error details. No agents or LangGraph are
+used and no `AgentExecution` rows are created. The original scene is preserved
+until the user clicks "Zastosuj wybrany wariant".
+
+The assistant shows "Generowanie...", then the actual generated text. It refreshes
+history/variants and ignores late responses after a scene switch. Failed requests
+retain the input for retry. The old `/api/llm/ping` endpoint has been removed.
+Responses have `Cache-Control: no-store`.
 Unavailable Ollama returns 503, a timeout 504, and a missing model or invalid
 upstream response 502 with a descriptive `detail`. The client never downloads
 models or substitutes another model automatically. For a different local host
 or port, `generate` accepts optional `base_url` and `timeout` keyword arguments.
-This probe does not save prompts, runs or variants and does not change the editor's
-generation workflow. No additional dependency or database migration is needed.
+No additional dependency or database migration is needed.
 
 ### Application API
 
@@ -190,6 +209,7 @@ Paths below are relative to `/api` and do not have trailing slashes:
 | Acts | `GET/POST /projects/{id}/acts`, `GET/PATCH/DELETE /acts/{id}` |
 | Characters | `GET/POST /projects/{id}/characters`, `GET/PATCH/DELETE /characters/{id}` |
 | Scenes | `GET/POST /projects/{id}/scenes`, `GET/PATCH/DELETE /scenes/{id}` |
+| Local generation | `POST /scenes/{id}/generate` |
 | Cast | `GET/POST /scenes/{id}/cast`, `GET/PATCH/DELETE /cast/{id}` |
 | Prompt history | `GET/POST /scenes/{id}/prompts`, `GET /prompts/{id}`, `GET /prompts/{id}/run` |
 | Generation runs | `GET /scenes/{id}/runs`, `GET /runs/{id}` |
@@ -218,8 +238,9 @@ Prompt creation accepts `user_prompt` and optional `generation_parameters`
 (`temperature`, `max_tokens`). The server fixes the model to Bielik 11B and
 captures project/act/scene/cast/preferences in `context_snapshot`. Without explicit
 parameters it uses the user's preferences. Prompt history is immutable and scoped
-to a scene. This endpoint only saves the request: no LLM worker is connected yet,
-so it does not fabricate a run. A prompt without a run returns 404 at `/prompts/{id}/run`.
+to a scene. The `/prompts` endpoint only saves the request; use `/scenes/{id}/generate`
+to perform a real generation and create its run/variant. A saved prompt without a
+run returns 404 at `/prompts/{id}/run`.
 Runs, agent executions and generated variants are server-managed read-only data.
 Existing seeded examples are available through their GET endpoints.
 Select a variant with `{ "apply_to_scene": false }` or explicitly apply its text
@@ -290,9 +311,9 @@ with the full heading in `location_heading` are supported without duplicating th
 time; existing custom time labels from the API are preserved. Records are normalized
 through ordinary editor saves, without a bulk data rewrite or schema migration.
 `usePromptHistory.ts` reads and saves scene-specific history through the API.
-The assistant reads actual stored runs, agent executions and variants. Saving a
-prompt does not claim to generate text: no LLM worker is connected yet. Choosing
-or applying a stored variant uses the selection endpoint. Statistics include
+The assistant generates directly through Ollama and reads actual stored runs and
+variants. It shows agent details only for records that have agent executions.
+Choosing or applying a stored variant uses the selection endpoint. Statistics include
 server-provided prompt activity and generation totals.
 
 The old static project data and AI simulator files have been removed. Existing
@@ -323,7 +344,9 @@ The backend suite is divided into:
 - `test_workspace_flow.py`: complete editor payloads, dashboard actions, cast,
   scene moves and prompt snapshots surviving logout and a fresh login.
 - `test_ollama.py`: fixed-model HTTP requests, response validation, connection and
-  timeout failures, and the development-only ping endpoint (without a live LLM).
+  timeout failures, and removal of the temporary ping endpoint (without a live LLM).
+- `test_scene_generation.py`: persisted scene context, authenticated/CSRF-protected
+  generation, preferences, failed runs and variants, with Ollama mocked at the HTTP-client boundary.
 
 Frontend tests use Vitest, React Testing Library and jsdom. They run the actual
 components/hooks/API client and intercept fetch at the HTTP boundary with
@@ -342,7 +365,7 @@ npm run build
 
 `npm run test:watch` runs Vitest in watch mode. Test organization:
 
-- `tests/api/`: CSRF, transport failures, request options and all 51 API operations.
+- `tests/api/`: CSRF, transport failures, request options and all 52 API operations.
 - `tests/hooks/`: session restoration/expiry/logout, account preferences, profile,
   project loading, debounced scene saves, cast, undo/redo, structure and prompt history.
 - `tests/services/`: DTO mapping, pagination, metadata preservation and error messages.

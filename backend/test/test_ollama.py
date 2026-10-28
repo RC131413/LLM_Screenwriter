@@ -3,7 +3,7 @@ from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 
 from backend.ollama import OLLAMA_MODEL, OllamaError, generate
 
@@ -29,10 +29,11 @@ class OllamaClientTests(SimpleTestCase):
     @patch('backend.ollama.urlopen')
     def test_accepts_custom_server_address_and_timeout_but_keeps_model_fixed(self, opener):
         opener.return_value.__enter__.return_value.read.return_value = b'{"response":"OK","done":true}'
-        generate('Test', base_url='http://127.0.0.1:11435/', timeout=10)
+        generate('Test', base_url='http://127.0.0.1:11435/', timeout=10, temperature=0.3, max_tokens=512)
         self.assertEqual(opener.call_args.args[0].full_url, 'http://127.0.0.1:11435/api/generate')
         self.assertEqual(opener.call_args.kwargs['timeout'], 10)
         self.assertEqual(json.loads(opener.call_args.args[0].data)['model'], OLLAMA_MODEL)
+        self.assertEqual(json.loads(opener.call_args.args[0].data)['options'], {'num_predict': 512, 'temperature': 0.3})
 
     @patch('backend.ollama.urlopen')
     def test_rejects_empty_or_non_text_prompts_without_http_request(self, opener):
@@ -85,30 +86,9 @@ class OllamaClientTests(SimpleTestCase):
                 self.assertEqual(caught.exception.status_code, 502)
 
 
-@override_settings(DEBUG=True)
-class LlmPingTests(SimpleTestCase):
-    @patch('backend.ollama.generate', return_value='Tak, połączenie działa.')
-    def test_development_probe_returns_real_client_result_without_login(self, generate_text):
-        response = self.client.get('/api/llm/ping')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'model': OLLAMA_MODEL, 'response': 'Tak, połączenie działa.'})
-        self.assertEqual(response['Cache-Control'], 'no-store')
-        generate_text.assert_called_once()
-        self.assertIn('Bielik', generate_text.call_args.args[0])
-
+class RemovedLlmPingTests(SimpleTestCase):
     @patch('backend.ollama.generate')
-    def test_probe_exposes_clear_upstream_failure_statuses(self, generate_text):
-        for status in (502, 503, 504):
-            with self.subTest(status=status):
-                generate_text.side_effect = OllamaError('Test upstream failure', status_code=status)
-                response = self.client.get('/api/llm/ping')
-                self.assertEqual(response.status_code, status)
-                self.assertEqual(response.json(), {'detail': 'Test upstream failure'})
-                self.assertEqual(response['Cache-Control'], 'no-store')
-
-    @override_settings(DEBUG=False)
-    @patch('backend.ollama.generate')
-    def test_probe_is_disabled_outside_development(self, generate_text):
+    def test_temporary_probe_is_removed(self, generate_text):
         response = self.client.get('/api/llm/ping')
         self.assertEqual(response.status_code, 404)
         generate_text.assert_not_called()

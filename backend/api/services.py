@@ -27,6 +27,27 @@ OWNER_PATHS = {
 }
 
 
+SCENE_GENERATION_SYSTEM_PROMPT = (
+    'Jesteś polskim scenarzystą. Wykonaj instrukcję użytkownika na podstawie aktualnej sceny. '
+    'Zwróć wyłącznie gotową treść sceny, bez komentarzy i bez znaczników Markdown. '
+    'Jeśli scena jest pusta, napisz ją na podstawie instrukcji użytkownika.'
+)
+
+
+def scene_generation_prompt(prompt):
+    """Use the frozen database snapshot, never scene text supplied by the browser."""
+    scene = prompt.context_snapshot['scene']
+    return (
+        f'{prompt.system_prompt}\n\n'
+        f'AKTUALNA SCENA:\n'
+        f'Tytuł: {scene["title"]}\n'
+        f'Miejsce / nagłówek: {scene["location_heading"]}\n'
+        f'Pora dnia: {scene["time_of_day"]}\n'
+        f'Treść:\n{scene["content_text"] or "(Scena nie zawiera jeszcze tekstu.)"}\n\n'
+        f'INSTRUKCJA UŻYTKOWNIKA:\n{prompt.user_prompt}'
+    )
+
+
 def owned(model, user):
     return model.objects.filter(**{OWNER_PATHS[model]: user})
 

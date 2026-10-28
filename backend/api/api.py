@@ -3,6 +3,7 @@
 from datetime import timedelta
 from typing import Literal
 
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -19,6 +20,8 @@ from ninja.pagination import paginate
 from ninja.security import django_auth
 from ninja.throttling import AnonRateThrottle
 from ninja.utils import check_csrf
+
+from backend import ollama
 
 from . import scheams as s
 from .models import (
@@ -49,6 +52,21 @@ def integrity_error(request, error):
 def csrf_token(request, response: HttpResponse):
     response['Cache-Control'] = 'no-store'
     return {'csrf_token': get_token(request)}
+
+
+@api.get('/llm/ping', auth=None,
+         response={200: s.LlmPingOut, 404: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut},
+         tags=['LLM'])
+def llm_ping(request, response: HttpResponse):
+    """Temporary development-only probe; each call performs a real generation."""
+    response['Cache-Control'] = 'no-store'
+    if not settings.DEBUG:
+        return 404, {'detail': 'Not found.'}
+    try:
+        answer = ollama.generate('Odpowiedz jednym krótkim zdaniem po polsku: czy połączenie z modelem Bielik działa?')
+    except ollama.OllamaError as error:
+        return error.status_code, {'detail': str(error)}
+    return {'model': ollama.OLLAMA_MODEL, 'response': answer}
 
 
 @api.post('/auth/register', auth=None, response={201: s.UserOut},

@@ -4,6 +4,7 @@
 
 - `frontend/`: React, TypeScript and Vite application.
 - `backend/`: Django settings, URLs, ASGI and WSGI entry points.
+- `backend/ollama.py`: minimal HTTP client for the local Bielik model in Ollama.
 - `backend/api/`: Django application registered as `backend.api.apps.ApiConfig`;
   contains models corresponding to the database ERD.
 - `backend/test/`: tests grouped by authentication, account, projects, structure,
@@ -125,6 +126,41 @@ After changing backend sources or dependencies, rebuild the setup service before
 running it again: `docker compose up -d --build db_setup`.
 
 ## HTTP API (Django Ninja)
+
+### Local LLM connection (MVP)
+
+`backend/ollama.py` exposes `generate(prompt: str) -> str`. It sends UTF-8 JSON to
+`http://127.0.0.1:11434/api/generate` using Python's standard library, with
+`stream: false`, a 120-second timeout and a 128-token output limit for this MVP.
+The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
+Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
+The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
+
+With Ollama installed and running, download the model once:
+
+```powershell
+ollama pull SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M
+```
+
+Start Django normally and test in a browser or PowerShell:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/llm/ping
+```
+
+`GET /api/llm/ping` sends a fixed Polish test prompt and returns
+`{ "model": "SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M", "response": "..." }`.
+This temporary diagnostic endpoint requires `DJANGO_DEBUG=True` and does not
+require login. With DEBUG disabled it returns 404 without contacting Ollama.
+Each request generates fresh text; responses have `Cache-Control: no-store`.
+Unavailable Ollama returns 503, a timeout 504, and a missing model or invalid
+upstream response 502 with a descriptive `detail`. The client never downloads
+models or substitutes another model automatically. For a different local host
+or port, `generate` accepts optional `base_url` and `timeout` keyword arguments.
+This probe does not save prompts, runs or variants and does not change the editor's
+generation workflow. No additional dependency or database migration is needed.
+
+### Application API
 
 Run the backend with `.\venv\Scripts\python.exe manage.py runserver` from the
 repository root. Interactive documentation is at
@@ -286,6 +322,8 @@ The backend suite is divided into:
 - `test_models.py`, `test_seed.py`: ERD constraints, JSON defaults, cascades and seeding.
 - `test_workspace_flow.py`: complete editor payloads, dashboard actions, cast,
   scene moves and prompt snapshots surviving logout and a fresh login.
+- `test_ollama.py`: fixed-model HTTP requests, response validation, connection and
+  timeout failures, and the development-only ping endpoint (without a live LLM).
 
 Frontend tests use Vitest, React Testing Library and jsdom. They run the actual
 components/hooks/API client and intercept fetch at the HTTP boundary with

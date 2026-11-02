@@ -64,7 +64,11 @@ export function promptFixture(sceneId = 20, id = 50): ApiPrompt {
 export function variantFixture(sceneId = 20, id = 70): ApiSceneVariant {
   return {
     id, run_id: 60, scene_id: sceneId, variant_number: 1, title: 'Wariant Bielika',
-    generated_full_text: 'ANNA\n\nZnalazłam list.', critic_score: null, critic_feedback: '', critic_metadata: {},
+    generated_full_text: 'ANNA\n\nZnalazłam list.', critic_score: null, critic_feedback: '',
+    critic_metadata: { format: 'screenplay_blocks_v1', blocks: [
+      { id: 'generated-character', type: 'character', text: 'ANNA' },
+      { id: 'generated-dialogue', type: 'dialogue', text: 'Znalazłam list.' },
+    ] },
     is_selected: false, created_at: timestamp,
   };
 }

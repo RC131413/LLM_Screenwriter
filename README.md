@@ -137,6 +137,8 @@ keyword arguments control generation. The scene endpoint uses saved AI preferenc
 The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
 Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
 The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
+Scene generation supplies a JSON schema through Ollama's `format` field, following
+its [structured-output API](https://docs.ollama.com/capabilities/structured-outputs).
 
 With Ollama installed and running, download the model once:
 
@@ -168,6 +170,25 @@ text in `generated_full_text`. Prompt history, a real `GenerationRun` and its
 `completed` or `failed`, with timing and error details. No agents or LangGraph are
 used and no `AgentExecution` rows are created. The original scene is preserved
 until the user clicks "Zastosuj wybrany wariant".
+
+Each generation returns exactly one scene as an ordered `blocks` array. Allowed
+types match the manual editor: `action`, `character`, `dialogue`, `parenthetical`,
+and `transition`. The backend validates the JSON and speaker/dialogue order,
+normalizes character/transition capitalization and parenthetical brackets, and
+assigns unique block IDs. Scene headings remain in their separate fields.
+Invalid or token-truncated output marks the run as failed without saving a variant.
+There are no automatic retries or three-variant generation loops.
+
+`generated_full_text` remains readable plain text joined from those paragraphs;
+the matching typed blocks are stored in `critic_metadata.blocks`, with
+`format: "screenplay_blocks_v1"`. This reuses the existing JSON field without
+adding critic scores or database columns. `backend/api/screenplay.py` handles
+validation and conversion; the output schemas live in `scheams.py`.
+The assistant and preview dialog format these blocks like the manual screenplay.
+Applying a variant copies them to `scene.editor_metadata.blocks` and synchronizes
+`content_text`, preserving scene heading, time, context and other editor metadata.
+Malformed stored blocks are rejected before replacing the scene. Older text-only
+variants remain readable/applicable as plain text; they are not retroactively classified.
 
 The assistant shows "Generowanie...", then the actual generated text. It refreshes
 history/variants and ignores late responses after a scene switch. Failed requests
@@ -347,6 +368,9 @@ The backend suite is divided into:
   timeout failures, and removal of the temporary ping endpoint (without a live LLM).
 - `test_scene_generation.py`: persisted scene context, authenticated/CSRF-protected
   generation, preferences, failed runs and variants, with Ollama mocked at the HTTP-client boundary.
+- `test_screenplay.py`: structured output validation, block IDs/types, speaker ordering,
+  normalization and rejection of malformed blocks. Variant-application tests also
+  verify that those blocks survive a workspace reload.
 
 Frontend tests use Vitest, React Testing Library and jsdom. They run the actual
 components/hooks/API client and intercept fetch at the HTTP boundary with

@@ -29,7 +29,17 @@ OWNER_PATHS = {
 
 SCENE_GENERATION_SYSTEM_PROMPT = (
     'Jesteś polskim scenarzystą. Wykonaj instrukcję użytkownika na podstawie aktualnej sceny. '
-    'Zwróć wyłącznie gotową treść sceny, bez komentarzy i bez znaczników Markdown. '
+    'Zwróć wyłącznie jeden obiekt JSON z tablicą blocks, bez komentarzy i bez znaczników Markdown. '
+    'Każdy blok ma wyłącznie pola type i text. Dozwolone typy: action (akapit akcji), '
+    'character (nazwa mówiącej postaci wielkimi literami), dialogue (jej wypowiedź), '
+    'parenthetical (wskazówka aktorska w nawiasach), transition (przejście wielkimi literami). '
+    'Każdy akapit to osobny blok. Przed dialogiem umieść blok character; '
+    'parenthetical może wystąpić między nazwą postaci a dialogiem lub w trakcie jej wypowiedzi. '
+    'Nie łącz imienia, wskazówek i dialogu w jednym bloku. Nie dodawaj nagłówka sceny do blocks, '
+    'ponieważ edytor przechowuje go osobno. Zwróć jedną scenę, nie listę wariantów. '
+    'Przykład: {"blocks":[{"type":"action","text":"Anna otwiera list."},'
+    '{"type":"character","text":"ANNA"},{"type":"parenthetical","text":"(szeptem)"},'
+    '{"type":"dialogue","text":"To niemożliwe."}]}. '
     'Jeśli scena jest pusta, napisz ją na podstawie instrukcji użytkownika.'
 )
 

@@ -17,6 +17,20 @@ class InputSchema(Schema):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
 
 
+class GeneratedBlock(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    type: Literal['action', 'character', 'dialogue', 'parenthetical', 'transition']
+    text: str = Field(min_length=1)
+
+
+class GeneratedScene(InputSchema):
+    blocks: list[GeneratedBlock] = Field(min_length=1)
+
+
+class EditorBlock(GeneratedBlock):
+    id: str = Field(min_length=1)
+
+
 class MessageOut(Schema):
     detail: str
 

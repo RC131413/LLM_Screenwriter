@@ -7,7 +7,7 @@ import { deferred, jsonResponse } from '../support/http';
 import { workspaceHttp } from '../support/workspaceHttp';
 
 describe('application → hooks → API client → HTTP', () => {
-  it('flushes the latest editor content before sending the prompt and displays the model result', async () => {
+  it('flushes editor changes, previews structured generation and applies it to the correct editor blocks', async () => {
     let generated = false;
     let sourceText = '';
     const http = workspaceHttp((call, workspace) => {
@@ -17,6 +17,12 @@ describe('application → hooks → API client → HTTP', () => {
       if (call.path === '/scenes/20/generate') {
         sourceText = workspace.scenes[0].content_text; generated = true;
         return jsonResponse(variantFixture(), 201);
+      }
+      if (call.path === '/variants/70/select') {
+        const variant = variantFixture();
+        workspace.scenes[0].content_text = variant.generated_full_text;
+        workspace.scenes[0].editor_metadata = { ...workspace.scenes[0].editor_metadata, blocks: variant.critic_metadata.blocks };
+        return jsonResponse({ ...variant, is_selected: true });
       }
       if (call.path === '/scenes/20/variants') return jsonResponse({ items: generated ? [variantFixture()] : [], count: generated ? 1 : 0 });
       if (['/scenes/20/prompts', '/scenes/20/runs'].includes(call.path)) return jsonResponse({ items: [], count: 0 });
@@ -34,6 +40,11 @@ describe('application → hooks → API client → HTTP', () => {
     expect(writes.map(call => [call.method, call.path])).toEqual([['PATCH', '/scenes/20'], ['POST', '/scenes/20/generate']]);
     expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog' });
     expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
+    await user.click(screen.getByRole('button', { name: 'Zastosuj wybrany wariant' }));
+    expect(await screen.findByLabelText('Postać 1')).toHaveValue('ANNA');
+    expect(screen.getByLabelText('Dialog 2')).toHaveValue('Znalazłam list.');
+    expect(screen.queryByLabelText('Akcja 1')).not.toBeInTheDocument();
+    expect(http.workspace.scenes[0].editor_metadata.blocks).toEqual(variantFixture().critic_metadata.blocks);
   });
 
   it('saves location and time separately from the visible heading field and restores them after remount', async () => {

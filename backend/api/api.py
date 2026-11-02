@@ -24,6 +24,7 @@ from ninja.utils import check_csrf
 from backend import ollama
 
 from . import scheams as s
+from .screenplay import blocks_text, generated_scene_blocks, variant_editor_blocks
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
@@ -473,7 +474,11 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.PromptIn, respons
     started = perf_counter()
     # No database transaction or row lock is held during the slow HTTP request.
     try:
-        answer = ollama.generate(scene_generation_prompt(prompt), **prompt.generation_parameters)
+        answer = ollama.generate(
+            scene_generation_prompt(prompt), output_schema=s.GeneratedScene.model_json_schema(),
+            **prompt.generation_parameters,
+        )
+        blocks = generated_scene_blocks(answer)
     except ollama.OllamaError as error:
         finished = timezone.now()
         GenerationRun.objects.filter(pk=run.pk).update(
@@ -486,7 +491,8 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.PromptIn, respons
         run = get_object_or_404(GenerationRun.objects.select_for_update(), pk=run.pk)
         variant = save_validated(SceneVariant(
             run=run, scene_id=prompt.scene_id, variant_number=1,
-            title='Wariant Bielika', generated_full_text=answer,
+            title='Wariant Bielika', generated_full_text=blocks_text(blocks),
+            critic_metadata={'format': 'screenplay_blocks_v1', 'blocks': blocks},
         ))
         save_validated(run, {
             'status': 'completed', 'finished_at': timezone.now(),
@@ -561,10 +567,13 @@ def select_variant(request, variant_id: s.PositiveId, payload: s.SelectVariantIn
     if payload.apply_to_scene:
         scene = Scene.objects.get(pk=variant.scene_id)
         metadata = dict(scene.editor_metadata)
-        blocks = variant.critic_metadata.get('blocks')
-        if isinstance(blocks, list):
+        blocks = variant_editor_blocks(variant.critic_metadata.get('blocks'))
+        if blocks is not None:
             metadata['blocks'] = blocks
         else:
             metadata.pop('blocks', None)
-        save_validated(scene, {'content_text': variant.generated_full_text, 'editor_metadata': metadata})
+        save_validated(scene, {
+            'content_text': blocks_text(blocks) if blocks is not None else variant.generated_full_text,
+            'editor_metadata': metadata,
+        })
     return variant

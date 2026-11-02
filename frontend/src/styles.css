@@ -613,6 +613,13 @@ body > #root > .request-state { min-height: 100vh; }
 .variant-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 12pt 'Courier New', monospace; }
 .generation-message { margin-top: 10px; color: var(--muted); }
 .generated-scene-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow-y: auto; margin: 0; padding: 12px; background: #f7f8f8; border: 1px solid var(--border); border-radius: 3px; font: 12px/1.7 'Courier New', Courier, monospace; }
+.screenplay-preview { white-space: normal; font: 12pt/1.65 'Courier New', Courier, monospace; }
+.screenplay-preview .screenplay-preview-block { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 18px; }
+.screenplay-preview .character { width: 64%; margin-left: 33%; margin-bottom: 0; text-transform: uppercase; }
+.screenplay-preview .dialogue { width: 72%; margin-left: 14%; }
+.screenplay-preview .parenthetical { width: 58%; margin-left: 25%; margin-bottom: 0; }
+.screenplay-preview .transition { text-align: right; text-transform: uppercase; }
+.screenplay-preview .screenplay-preview-block:last-child { margin-bottom: 0; }
 .account-fields > div { min-width: 0; }
 .form-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .modal-error { margin: 16px 24px; }

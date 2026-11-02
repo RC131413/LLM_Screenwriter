@@ -10,6 +10,23 @@ from backend.ollama import OLLAMA_MODEL, OllamaError, generate
 
 class OllamaClientTests(SimpleTestCase):
     @patch('backend.ollama.urlopen')
+    def test_sends_output_schema_to_ollama_for_enforced_json_generation(self, opener):
+        schema = {'type': 'object', 'properties': {'blocks': {'type': 'array'}}}
+        answer = '{"blocks":[{"type":"action","text":"Anna otwiera drzwi."}]}'
+        opener.return_value.__enter__.return_value.read.return_value = json.dumps({
+            'response': answer, 'done': True, 'done_reason': 'stop',
+        }).encode('utf-8')
+        self.assertEqual(generate('Test', output_schema=schema), answer)
+        self.assertEqual(json.loads(opener.call_args.args[0].data)['format'], schema)
+
+    @patch('backend.ollama.urlopen')
+    def test_token_limit_is_not_reported_as_a_complete_structured_scene(self, opener):
+        opener.return_value.__enter__.return_value.read.return_value = b'{"response":"{}","done":true,"done_reason":"length"}'
+        with self.assertRaises(OllamaError) as caught:
+            generate('Test', output_schema={'type': 'object'})
+        self.assertIn('limit tokenów', str(caught.exception))
+
+    @patch('backend.ollama.urlopen')
     def test_posts_utf8_prompt_to_fixed_model_and_returns_completed_text(self, opener):
         opener.return_value.__enter__.return_value.read.return_value = json.dumps({
             'response': 'Połączenie działa.', 'done': True,

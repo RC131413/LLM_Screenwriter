@@ -13,6 +13,7 @@ import { SceneContext } from './SceneContext';
 import { usePromptHistory } from '../hooks/usePromptHistory';
 import { PromptHistoryDialog } from './PromptHistoryDialog';
 import { RequestState } from './RequestState';
+import { ScreenplayPreview } from './ScreenplayPreview';
 
 interface Props {
   project: Project; scene: Scene | undefined; onSelect: (id: string) => void; onChange: (scene: Scene) => void;
@@ -117,7 +118,7 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, 
           {generating && <p role="status" className="small generation-message">Generowanie... Oczekiwanie na odpowiedź Bielika.</p>}
           {(error || loadError) && <p className="form-error" role="alert">{error || loadError}</p>}
         </section>
-        {chosen && <section className="panel-section" aria-label="Wynik generowania"><h3>Wynik generowania</h3><pre className="generated-scene-text">{chosen.generated_full_text}</pre></section>}
+        {chosen && <section className="panel-section" aria-label="Wynik generowania"><h3>Wynik generowania</h3><div className="generated-scene-text"><ScreenplayPreview variant={chosen} /></div></section>}
         {!generating && (loading ? <RequestState loading /> : <AgentProgress run={run} />)}
         <section className="panel-section variants-section"><div className="prompt-field-heading"><span className="eyebrow">ZAPISANE WARIANTY</span><IconButton label="Odśwież warianty i przebieg" disabled={loading || pending} onClick={() => setVersion(value => value + 1)}><RotateCcw size={15} /></IconButton></div>
           {!loading && !variants.length && <p className="muted small">Brak wariantów dla tej sceny.</p>}
@@ -130,6 +131,6 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, 
         <section className="panel-section"><span className="eyebrow">KONTEKST NARRACYJNY</span>{project.characters.filter(character => scene.characterIds.includes(character.id)).map(character => <div className="character-context" key={character.id}><strong>{character.name}</strong><p>{character.goal}</p><small>{character.voice}</small><dl className="metadata-list"><dt>Wygląd</dt><dd>{character.appearance || 'Nie określono'}</dd><dt>Przeszłość / historia</dt><dd>{character.backstory || 'Nie określono'}</dd></dl></div>)}</section></>}
     </div>
     {historyOpen && scene && <PromptHistoryDialog sceneTitle={scene.title} entries={promptHistory.entries} loading={promptHistory.loading} error={promptHistory.error} onRetry={promptHistory.retry} onClose={() => setHistoryOpen(false)} onSelect={prompt => { setBrief(prompt); setHistoryOpen(false); requestAnimationFrame(() => document.getElementById('scene-brief')?.focus()); }} />}
-    {preview && <Modal error={error} title={`Wariant: ${preview.title || preview.variant_number}`} onClose={() => setPreview(undefined)}><div className="variant-preview"><pre className="variant-text">{preview.generated_full_text}</pre></div><div className="modal-actions"><button className="button" disabled={pending} onClick={() => setPreview(undefined)}>Zamknij</button><button className="button primary" disabled={pending} onClick={async () => { await chooseVariant(preview.id); setPreview(undefined); }}>Wybierz wariant</button></div></Modal>}
+    {preview && <Modal error={error} title={`Wariant: ${preview.title || preview.variant_number}`} onClose={() => setPreview(undefined)}><div className="variant-preview"><ScreenplayPreview variant={preview} /></div><div className="modal-actions"><button className="button" disabled={pending} onClick={() => setPreview(undefined)}>Zamknij</button><button className="button primary" disabled={pending} onClick={async () => { await chooseVariant(preview.id); setPreview(undefined); }}>Wybierz wariant</button></div></Modal>}
   </aside>;
 }

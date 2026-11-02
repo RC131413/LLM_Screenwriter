@@ -17,7 +17,7 @@ class OllamaError(RuntimeError):
 
 
 def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = OLLAMA_TIMEOUT,
-             temperature: float = 0.7, max_tokens: int = 128) -> str:
+             temperature: float = 0.7, max_tokens: int = 128, output_schema: dict | None = None) -> str:
     """Send a prompt to the fixed Bielik model and return its completed text."""
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError('Prompt musi być niepustym tekstem.')
@@ -27,6 +27,8 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
         'stream': False,
         'options': {'num_predict': max_tokens, 'temperature': temperature},
     }
+    if output_schema is not None:
+        payload['format'] = output_schema
     request = Request(
         base_url.rstrip('/') + '/api/generate',
         data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
@@ -60,6 +62,8 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
 
     if not isinstance(data, dict) or data.get('done') is not True:
         raise OllamaError('Ollama nie zwróciła zakończonej odpowiedzi modelu.')
+    if output_schema is not None and data.get('done_reason') == 'length':
+        raise OllamaError('Model osiągnął limit tokenów przed ukończeniem sceny. Zwiększ limit w preferencjach AI.')
     text = data.get('response')
     if not isinstance(text, str) or not text.strip():
         raise OllamaError('Ollama nie zwróciła tekstu odpowiedzi modelu.')

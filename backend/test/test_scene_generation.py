@@ -1,15 +1,21 @@
+import json
 from unittest.mock import patch
 
 from django.test import Client
 
 from backend.api.models import AgentExecution, GenerationRun, Scene, SceneGenerationRequest, SceneVariant
 from backend.ollama import OLLAMA_MODEL, OllamaError
+from backend.api.scheams import GeneratedScene
 
 from ._api_base import ApiTestCase
 
+GENERATED_SCENE = json.dumps({'blocks': [
+    {'type': 'character', 'text': 'ANNA'}, {'type': 'dialogue', 'text': 'Znalazłam list.'},
+]}, ensure_ascii=False)
+
 
 class SceneGenerationTests(ApiTestCase):
-    @patch('backend.ollama.generate', return_value='ANNA\n\nZnalazłam list.')
+    @patch('backend.ollama.generate', return_value=GENERATED_SCENE)
     def test_current_database_scene_and_user_instruction_produce_a_persisted_variant(self, generate_text):
         self.scene.content_text = 'Aktualna treść zapisana w bazie.'
         self.scene.location_heading = 'WN. POCIĄG'
@@ -29,7 +35,9 @@ class SceneGenerationTests(ApiTestCase):
         for expected in ('Aktualna treść zapisana w bazie.', 'WN. POCIĄG', 'NOC', 'Dodaj krótki dialog o liście.'):
             self.assertIn(expected, text)
         generate_text.assert_called_once()
-        self.assertEqual(generate_text.call_args.kwargs, {'temperature': 0.7, 'max_tokens': 2048})
+        self.assertEqual(generate_text.call_args.kwargs, {
+            'temperature': 0.7, 'max_tokens': 2048, 'output_schema': GeneratedScene.model_json_schema(),
+        })
         variant = SceneVariant.objects.select_related('run__request').get(pk=generated['id'])
         self.assertEqual(variant.run.status, 'completed')
         self.assertIsNotNone(variant.run.finished_at)
@@ -38,6 +46,9 @@ class SceneGenerationTests(ApiTestCase):
         self.assertEqual(variant.run.request.model_name, OLLAMA_MODEL)
         self.assertEqual(variant.run.request.context_snapshot['scene']['content_text'], self.scene.content_text)
         self.assertEqual(variant.run.request.user_prompt, 'Dodaj krótki dialog o liście.')
+        self.assertEqual(variant.critic_metadata['format'], 'screenplay_blocks_v1')
+        self.assertEqual([block['type'] for block in variant.critic_metadata['blocks']], ['character', 'dialogue'])
+        self.assertEqual(variant.variant_number, 1)
         self.assertEqual((SceneGenerationRequest.objects.count(), GenerationRun.objects.count(), SceneVariant.objects.count(),
                           AgentExecution.objects.count()), (before[0] + 1, before[1] + 1, before[2] + 1, before[3]))
         self.scene.refresh_from_db()
@@ -45,17 +56,19 @@ class SceneGenerationTests(ApiTestCase):
         stored = self.assert_status(self.send('get', f'/variants/{variant.pk}'), 200).json()
         self.assertEqual(stored['generated_full_text'], generated['generated_full_text'])
 
-    @patch('backend.ollama.generate', return_value='Nowa scena.')
+    @patch('backend.ollama.generate', return_value=GENERATED_SCENE)
     def test_uses_saved_preferences_and_allows_valid_parameter_overrides(self, generate_text):
         self.assert_status(self.send('put', '/users/me/preferences', {
             'llm_preferences': {'temperature': 0.3, 'max_tokens': 512},
         }), 200)
         self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Zmień scenę.'}), 201)
-        self.assertEqual(generate_text.call_args.kwargs, {'temperature': 0.3, 'max_tokens': 512})
+        self.assertEqual(generate_text.call_args.kwargs['temperature'], 0.3)
+        self.assertEqual(generate_text.call_args.kwargs['max_tokens'], 512)
         self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
             'user_prompt': 'Skróć scenę.', 'generation_parameters': {'temperature': 0.2, 'max_tokens': 128},
         }), 201)
-        self.assertEqual(generate_text.call_args.kwargs, {'temperature': 0.2, 'max_tokens': 128})
+        self.assertEqual(generate_text.call_args.kwargs['temperature'], 0.2)
+        self.assertEqual(generate_text.call_args.kwargs['max_tokens'], 128)
 
     @patch('backend.ollama.generate')
     def test_requires_session_csrf_and_scene_ownership_before_contacting_ollama(self, generate_text):
@@ -94,7 +107,7 @@ class SceneGenerationTests(ApiTestCase):
                 self.assertEqual(run.variants.count(), 0)
         self.assertEqual(SceneVariant.objects.count(), before)
 
-    @patch('backend.ollama.generate', return_value='Nowa scena od zera.')
+    @patch('backend.ollama.generate', return_value=GENERATED_SCENE)
     def test_can_generate_for_an_empty_scene(self, generate_text):
         self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Napisz scenę spotkania.'}), 201)
         self.assertIn('(Scena nie zawiera jeszcze tekstu.)', generate_text.call_args.args[0])
@@ -105,9 +118,19 @@ class SceneGenerationTests(ApiTestCase):
 
         def delete_during_generation(*args, **kwargs):
             Scene.objects.filter(pk=scene_id).delete()
-            return 'Late response'
+            return GENERATED_SCENE
 
         generate_text.side_effect = delete_during_generation
         self.assert_status(self.send('post', f'/scenes/{scene_id}/generate', {'user_prompt': 'Test'}), 404)
         self.assertFalse(Scene.objects.filter(pk=scene_id).exists())
         self.assertFalse(SceneVariant.objects.filter(scene_id=scene_id).exists())
+
+    @patch('backend.ollama.generate', return_value='ANNA\nZły format bez JSON')
+    def test_invalid_model_format_fails_without_creating_a_variant(self, generate_text):
+        before = SceneVariant.objects.count()
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Test invalid format'}), 502)
+        self.assertEqual(SceneVariant.objects.count(), before)
+        run = GenerationRun.objects.get(request__user_prompt='Test invalid format')
+        self.assertEqual(run.status, 'failed')
+        self.assertIn('format', run.error_message)
+        generate_text.assert_called_once()

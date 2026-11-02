@@ -6,6 +6,51 @@ from ._api_base import ApiTestCase
 
 
 class GenerationTests(ApiTestCase):
+    def test_applying_structured_variant_preserves_block_types_ids_and_scene_context(self):
+        blocks = [
+            {'id': 'generated-action', 'type': 'action', 'text': 'Anna czyta list.'},
+            {'id': 'generated-name', 'type': 'character', 'text': 'ANNA'},
+            {'id': 'generated-direction', 'type': 'parenthetical', 'text': '(szeptem)'},
+            {'id': 'generated-dialogue', 'type': 'dialogue', 'text': 'To niemożliwe.'},
+            {'id': 'generated-transition', 'type': 'transition', 'text': 'CIĘCIE DO:'},
+        ]
+        self.variant.critic_metadata = {'format': 'screenplay_blocks_v1', 'blocks': blocks}
+        self.variant.generated_full_text = '\n\n'.join(block['text'] for block in blocks)
+        self.variant.save()
+        self.scene.editor_metadata = {'zoom': 120, 'status': 'review', 'blocks': [{'id': 'old', 'type': 'action', 'text': 'Old'}]}
+        self.scene.ai_metadata = {'notes': 'Preserve notes'}
+        self.scene.location_heading = 'WN. DOM'
+        self.scene.time_of_day = 'NOC'
+        self.scene.save()
+        self.assert_status(self.send('post', f'/variants/{self.variant.pk}/select', {'apply_to_scene': False}), 200)
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.editor_metadata['blocks'][0]['id'], 'old')
+        self.assert_status(self.send('post', f'/variants/{self.variant.pk}/select', {'apply_to_scene': True}), 200)
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.editor_metadata['blocks'], blocks)
+        self.assertEqual(self.scene.editor_metadata['zoom'], 120)
+        self.assertEqual(self.scene.editor_metadata['status'], 'review')
+        self.assertEqual(self.scene.ai_metadata, {'notes': 'Preserve notes'})
+        self.assertEqual(self.scene.location_heading, 'WN. DOM')
+        self.assertEqual(self.scene.time_of_day, 'NOC')
+        self.assertEqual(self.scene.content_text, self.variant.generated_full_text)
+        workspace = self.send('get', f'/projects/{self.project.pk}/workspace').json()
+        saved = next(scene for scene in workspace['scenes'] if scene['id'] == self.scene.pk)
+        self.assertEqual(saved['editor_metadata']['blocks'], blocks)
+
+    def test_invalid_variant_blocks_do_not_erase_scene_or_change_selection(self):
+        self.variant.critic_metadata = {'blocks': [{'id': 'bad', 'type': 'unknown', 'text': 'Text'}]}
+        self.variant.save()
+        self.scene.content_text = 'Original text'
+        self.scene.editor_metadata = {'zoom': 120}
+        self.scene.save()
+        self.assert_status(self.send('post', f'/variants/{self.variant.pk}/select', {'apply_to_scene': True}), 422)
+        self.scene.refresh_from_db()
+        self.variant.refresh_from_db()
+        self.assertEqual(self.scene.content_text, 'Original text')
+        self.assertEqual(self.scene.editor_metadata, {'zoom': 120})
+        self.assertFalse(self.variant.is_selected)
+
 
     def test_prompt_uses_saved_engine_preferences(self):
         self.assert_status(self.send('put', '/users/me/preferences', {

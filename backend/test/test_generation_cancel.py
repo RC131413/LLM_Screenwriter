@@ -9,7 +9,8 @@ from backend.ollama import OllamaCancelled
 from ._api_base import ApiTestCase
 
 
-ANSWER = json.dumps({'blocks': [{'type': 'action', 'text': 'Nowa scena.'}]})
+ANSWER = json.dumps({'blocks': [{'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None, 'spoken_text': 'Nowa scena.'}],
+                     'heading': {'location_type': 'WN.', 'location_heading': 'DOM', 'time_of_day': 'RANO'}})
 
 
 class GenerationCancellationTests(ApiTestCase):

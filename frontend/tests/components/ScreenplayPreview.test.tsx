@@ -4,6 +4,14 @@ import { ScreenplayPreview } from '../../src/components/ScreenplayPreview';
 import { variantFixture } from '../support/fixtures';
 
 describe('structured screenplay preview', () => {
+  it('shows a newly proposed heading separately from continuation blocks', () => {
+    const variant = variantFixture();
+    variant.critic_metadata.heading = { location_heading: 'WN. MIESZKANIE', time_of_day: 'RANO' };
+    render(<ScreenplayPreview variant={variant} />);
+    expect(screen.getByText('WN. MIESZKANIE - RANO')).toHaveClass('screenplay-preview-heading');
+    expect(screen.getByText('ANNA')).toHaveClass('character');
+  });
+
   it('renders every paragraph with the same block type used by the scene editor', () => {
     const variant = variantFixture();
     variant.critic_metadata.blocks = [

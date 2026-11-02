@@ -25,7 +25,7 @@ from ninja.utils import check_csrf
 from backend import ollama
 
 from . import scheams as s
-from .screenplay import blocks_text, generated_scene_blocks, variant_editor_blocks
+from .screenplay import append_variant, blocks_text, generated_continuation, scene_output_schema
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
@@ -463,7 +463,7 @@ def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', syste
 @api.post('/scenes/{scene_id}/generate',
           response={201: s.VariantOut, 409: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
 def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, response: HttpResponse):
-    """One synchronous Ollama call, backed by existing history/run/variant records."""
+    """Generate one structured variant; dialogue is optional."""
     response['Cache-Control'] = 'no-store'
     if not payload.user_prompt.strip():
         raise ValidationError({'user_prompt': 'Wpisz instrukcję dla modelu.'})
@@ -474,12 +474,25 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
     started = perf_counter()
     # No database transaction or row lock is held during the slow HTTP request.
     try:
+        current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
+        if current_status is None:
+            raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
+        if current_status == 'cancelled':
+            raise ollama.OllamaCancelled()
         answer = ollama.generate(
-            scene_generation_prompt(prompt), output_schema=s.GeneratedScene.model_json_schema(),
+            scene_generation_prompt(prompt), output_schema=scene_output_schema(prompt.context_snapshot['scene']),
             is_cancelled=lambda: generation_is_cancelled(run.pk),
             **prompt.generation_parameters,
         )
-        blocks = generated_scene_blocks(answer)
+        current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
+        if current_status is None:
+            raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
+        if current_status == 'cancelled':
+            raise ollama.OllamaCancelled()
+        blocks, heading = generated_continuation(
+            answer, prompt.context_snapshot['scene'],
+            parentheticals=prompt.context_snapshot.get('writing_style_preferences', {}).get('parentheticals', 'sparingly'),
+        )
     except ollama.OllamaError as error:
         finished = timezone.now()
         GenerationRun.objects.filter(pk=run.pk, status='running').update(
@@ -496,7 +509,10 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
         variant = save_validated(SceneVariant(
             run=run, scene_id=prompt.scene_id, variant_number=1,
             title='Wariant Bielika', generated_full_text=blocks_text(blocks),
-            critic_metadata={'format': 'screenplay_blocks_v1', 'blocks': blocks},
+            critic_metadata={
+                'format': 'screenplay_blocks_v1', 'operation': 'append', 'blocks': blocks,
+                **({'heading': heading} if heading else {}),
+            },
         ))
         save_validated(run, {
             'status': 'completed', 'finished_at': timezone.now(),
@@ -604,14 +620,7 @@ def select_variant(request, variant_id: s.PositiveId, payload: s.SelectVariantIn
     save_validated(variant, {'is_selected': True})
     if payload.apply_to_scene:
         scene = Scene.objects.get(pk=variant.scene_id)
-        metadata = dict(scene.editor_metadata)
-        blocks = variant_editor_blocks(variant.critic_metadata.get('blocks'))
-        if blocks is not None:
-            metadata['blocks'] = blocks
-        else:
-            metadata.pop('blocks', None)
-        save_validated(scene, {
-            'content_text': blocks_text(blocks) if blocks is not None else variant.generated_full_text,
-            'editor_metadata': metadata,
-        })
+        changes = append_variant(scene, variant)
+        if changes is not None:
+            save_validated(scene, changes)
     return variant

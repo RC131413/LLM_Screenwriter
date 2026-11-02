@@ -139,7 +139,8 @@ The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
 Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
 The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
 Requests explicitly set `num_gpu: 99` to offload all layers of the fixed Bielik
-model to the GPU. On the development RTX 3060 Ti (8 GB), `ollama ps` verified
+model to the GPU and `num_batch: 128` to limit prompt-processing buffers on the
+8 GB development GPU. On the development RTX 3060 Ti (8 GB), `ollama ps` verified
 `100% GPU` with the original 4096-token context, compared to automatic 83% GPU /
 17% CPU loading. GPU fit depends on free VRAM; `ollama ps` reports model placement,
 as described in [Ollama's FAQ](https://docs.ollama.com/faq#how-can-i-tell-if-my-model-was-loaded-onto-the-gpu).
@@ -166,7 +167,7 @@ X-CSRFToken: <current CSRF token>
 
 The server verifies scene ownership and reads its current text and heading from
 PostgreSQL. It freezes a context snapshot, combines the scene with `user_prompt`
-and sends one direct request to Ollama. The browser cannot override the model or
+and sends a direct request to Ollama. The browser cannot override the model or
 provide a replacement scene context. Optional `generation_parameters` accepts
 `temperature` and `max_tokens`. No database lock is held while waiting for Ollama.
 
@@ -195,24 +196,73 @@ racing late responses, retains the prompt, and offers cancellation retry on a
 network failure. Cancelled runs do not display a variant, including after reload.
 Cancelling while the editor save is pending prevents the LLM request entirely.
 
-Each generation returns exactly one scene as an ordered `blocks` array. Allowed
-types match the manual editor: `action`, `character`, `dialogue`, `parenthetical`,
-and `transition`. The backend validates the JSON and speaker/dialogue order,
-normalizes character/transition capitalization and parenthetical brackets, and
-assigns unique block IDs. Scene headings remain in their separate fields.
+Each generation returns exactly one continuation as an ordered `blocks` array.
+The model's enforced schema accepts `action`, `speech` and `transition`.
+A `speech` groups `speaker`, nullable `parenthetical` and `spoken_text`; the backend
+expands it to the existing editor blocks in this order: `character`, optional
+`parenthetical`, `dialogue`. This prevents detached or trailing acting directions.
+The prompt encourages short, useful acting directions mixed with ordinary speech;
+`parenthetical: null` means no direction is needed for that line. New AI directions are refined
+before saving: redundant self-addressing is removed while preserving vocal intent
+(e.g. `szeptem do siebie` becomes `szeptem`), and an unchanged direction for the same
+speaker is not repeated. A different direction or speaker is retained. Existing
+scene blocks are consulted for continuation consistency and remain untouched.
+The `ignore` writing preference removes all new parenthetical blocks even if the
+model includes them. Preview text, saved blocks and the applied variant use the
+same refined result; this does not add an extra model call.
+The prompt distinguishes observable action/environment from words spoken aloud,
+with explicit examples, and asks for emotions to be shown through actions or speech.
+Meaning still depends on the model; schema validation guarantees the structural
+ordering, not perfect semantic classification of every sentence.
+The backend normalizes capitalization/brackets and assigns unique block IDs.
+The prompt requests only new text; an exact repeated
+suffix of the existing scene is removed from the start of the response. A response
+containing only repeated text is rejected without creating a variant.
+Only an empty scene without a heading or time of day requests an additional
+`heading` object in the enforced JSON schema. The model must choose `location_type`
+from `WN.` / `PL.`, supply a place name and a standard Polish `time_of_day`.
+The backend constructs the prefixed `location_heading`; the UI displays e.g.
+`WN. CHATA - ŚWIT`. The persisted heading still uses the existing two database
+fields. Redundant leading heading-only action paragraphs (`Miejsce:`, `Pora dnia:`)
+are removed. The proposed heading appears above the variant preview, separate
+from the blocks. Existing saved scenes and variants are not rewritten.
 Invalid or token-truncated output marks the run as failed without saving a variant.
-There are no automatic retries or three-variant generation loops.
+Dialogue is optional for every scene request. Action-only output is valid without
+special keywords and never triggers an extra model call. Generation makes one
+Ollama request and saves one validated variant; malformed JSON is still rejected.
+The prompt asks for short, observable actions, natural dialogue only when useful,
+and sparing acting directions. New paragraphs should advance the scene goal with
+information, obstacles, discoveries or decisions rather than repeated questions,
+repeated gestures or abstract descriptions of feelings. It also asks the model to
+preserve established facts, exact character names, and the heading's place/time.
+Movement between interior and exterior should end the fragment before the new
+setting; it belongs in another scene. These are writing instructions, not semantic
+guarantees. Unless the author specifies a length, a short fragment is requested.
+Transitions use standard labels; a heading cannot be embedded in their text.
+
+The prompt now includes the saved scene goal (`ai_metadata.scene_goal`), author
+notes (`ai_metadata.notes`), selected character names and writing style preferences.
+These values come from the frozen database snapshot after pending editor saves
+finish. The goal guides the continuation; it is not copied as screenplay text.
+Previously these values were stored in the snapshot but not included in the
+text sent to Ollama.
 
 `generated_full_text` remains readable plain text joined from those paragraphs;
 the matching typed blocks are stored in `critic_metadata.blocks`, with
-`format: "screenplay_blocks_v1"`. This reuses the existing JSON field without
+`format: "screenplay_blocks_v1"` and `operation: "append"`. A proposed heading,
+when applicable, uses `critic_metadata.heading`. This reuses the existing JSON field without
 adding critic scores or database columns. `backend/api/screenplay.py` handles
 validation and conversion; the output schemas live in `scheams.py`.
 The assistant and preview dialog format these blocks like the manual screenplay.
-Applying a variant copies them to `scene.editor_metadata.blocks` and synchronizes
-`content_text`, preserving scene heading, time, context and other editor metadata.
-Malformed stored blocks are rejected before replacing the scene. Older text-only
-variants remain readable/applicable as plain text; they are not retroactively classified.
+Applying a variant appends its blocks to `scene.editor_metadata.blocks` and its
+text to `content_text`, preserving the existing text, block IDs, context and editor
+metadata, including edits made after generation. Applied variant IDs are recorded
+in `editor_metadata.applied_variant_ids`, so applying the same variant again does
+not append it twice. A proposed heading is saved only if the scene is still empty
+and has no heading; user-entered headings are preserved. Malformed stored blocks
+are rejected before changing the scene. Older text-only variants are appended as
+plain action text, with an exact copied prefix removed using their saved scene
+snapshot; they are not retroactively classified into screenplay paragraphs.
 
 The assistant shows "Generowanie...", then the actual generated text. It refreshes
 history/variants and ignores late responses after a scene switch. Failed requests

@@ -12,6 +12,7 @@ OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
 OLLAMA_MODEL = 'SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M'
 OLLAMA_TIMEOUT = 120
 OLLAMA_GPU_LAYERS = 99  # Bielik has 51 layers; request offloading all of them.
+OLLAMA_BATCH_SIZE = 128  # Keep prompt-processing buffers small on the 8 GB development GPU.
 
 
 class OllamaError(RuntimeError):
@@ -38,7 +39,8 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
     connection = connection_type(address.hostname, address.port, timeout=timeout)
     payload = {
         'model': OLLAMA_MODEL, 'prompt': prompt, 'stream': True,
-        'options': {'num_predict': max_tokens, 'temperature': temperature, 'num_gpu': OLLAMA_GPU_LAYERS},
+        'options': {'num_predict': max_tokens, 'temperature': temperature,
+                    'num_gpu': OLLAMA_GPU_LAYERS, 'num_batch': OLLAMA_BATCH_SIZE},
     }
     if output_schema is not None:
         payload['format'] = output_schema

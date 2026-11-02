@@ -99,7 +99,7 @@ export default function App() {
           </div>
         </main>
         {assistantOpen && <AssistantPanel key={project.id} project={project} scene={scene} onSelect={selectScene} onChange={workspace.updateScene} onClose={() => setAssistantOpen(false)} onPrepare={workspace.flush}
-          onApply={async variantId => { await workspace.applyVariant(project.id, variantId); setNotice('Wariant zapisany w scenie.'); }} />}
+          onApply={async variantId => { await workspace.applyVariant(project.id, variantId); setNotice('Wariant dopisany do sceny.'); }} />}
       </div>
     </> : <ProjectDashboard profile={profile} onAccountSettings={() => navigation.openSettings()} onLogout={logout} projects={workspace.projects} collection={dashboardCollection} onCollection={setDashboardCollection} onOpen={switchProject} onCreate={() => setModal('project')} onEdit={editProject} onDelete={setDeletingProjectId}
       onFavorite={id => void perform(() => workspace.projectAction(id, workspace.projects.find(item => item.id === id)?.metadata?.is_favorite ? 'unfavorite' : 'favorite'))}

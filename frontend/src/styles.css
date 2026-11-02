@@ -616,6 +616,7 @@ body > #root > .request-state { min-height: 100vh; }
 .generation-message { margin-top: 10px; color: var(--muted); }
 .generated-scene-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow-y: auto; margin: 0; padding: 12px; background: #f7f8f8; border: 1px solid var(--border); border-radius: 3px; font: 12px/1.7 'Courier New', Courier, monospace; }
 .screenplay-preview { white-space: normal; font: 12pt/1.65 'Courier New', Courier, monospace; }
+.screenplay-preview-heading { font-weight: 700; text-transform: uppercase; white-space: pre-wrap; margin: 0 0 22px; }
 .screenplay-preview .screenplay-preview-block { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 18px; }
 .screenplay-preview .character { width: 64%; margin-left: 33%; margin-bottom: 0; text-transform: uppercase; }
 .screenplay-preview .dialogue { width: 72%; margin-left: 14%; }

@@ -27,16 +27,16 @@ class GenerationTests(ApiTestCase):
         self.assertEqual(self.scene.editor_metadata['blocks'][0]['id'], 'old')
         self.assert_status(self.send('post', f'/variants/{self.variant.pk}/select', {'apply_to_scene': True}), 200)
         self.scene.refresh_from_db()
-        self.assertEqual(self.scene.editor_metadata['blocks'], blocks)
+        self.assertEqual(self.scene.editor_metadata['blocks'], [{'id': 'old', 'type': 'action', 'text': 'Old'}, *blocks])
         self.assertEqual(self.scene.editor_metadata['zoom'], 120)
         self.assertEqual(self.scene.editor_metadata['status'], 'review')
         self.assertEqual(self.scene.ai_metadata, {'notes': 'Preserve notes'})
         self.assertEqual(self.scene.location_heading, 'WN. DOM')
         self.assertEqual(self.scene.time_of_day, 'NOC')
-        self.assertEqual(self.scene.content_text, self.variant.generated_full_text)
+        self.assertEqual(self.scene.content_text, 'Old\n\n' + self.variant.generated_full_text)
         workspace = self.send('get', f'/projects/{self.project.pk}/workspace').json()
         saved = next(scene for scene in workspace['scenes'] if scene['id'] == self.scene.pk)
-        self.assertEqual(saved['editor_metadata']['blocks'], blocks)
+        self.assertEqual(saved['editor_metadata']['blocks'], self.scene.editor_metadata['blocks'])
 
     def test_invalid_variant_blocks_do_not_erase_scene_or_change_selection(self):
         self.variant.critic_metadata = {'blocks': [{'id': 'bad', 'type': 'unknown', 'text': 'Text'}]}
@@ -130,7 +130,7 @@ class GenerationTests(ApiTestCase):
         self.assert_status(self.send('post', f'/variants/{self.next_variant.pk}/select', {'apply_to_scene': True}), 200)
         self.scene.refresh_from_db()
         self.assertEqual(self.scene.content_text, self.next_variant.generated_full_text)
-        self.assertNotIn('blocks', self.scene.editor_metadata)
+        self.assertEqual(self.scene.editor_metadata['blocks'][0]['text'], self.next_variant.generated_full_text)
         self.assertEqual(self.scene.editor_metadata['zoom'], 120)
         self.assertEqual(SceneVariant.objects.filter(scene=self.scene, is_selected=True).count(), 1)
 

@@ -29,33 +29,89 @@ OWNER_PATHS = {
 
 
 SCENE_GENERATION_SYSTEM_PROMPT = (
-    'Jesteś polskim scenarzystą. Wykonaj instrukcję użytkownika na podstawie aktualnej sceny. '
-    'Zwróć wyłącznie jeden obiekt JSON z tablicą blocks, bez komentarzy i bez znaczników Markdown. '
-    'Każdy blok ma wyłącznie pola type i text. Dozwolone typy: action (akapit akcji), '
-    'character (nazwa mówiącej postaci wielkimi literami), dialogue (jej wypowiedź), '
-    'parenthetical (wskazówka aktorska w nawiasach), transition (przejście wielkimi literami). '
-    'Każdy akapit to osobny blok. Przed dialogiem umieść blok character; '
-    'parenthetical może wystąpić między nazwą postaci a dialogiem lub w trakcie jej wypowiedzi. '
-    'Nie łącz imienia, wskazówek i dialogu w jednym bloku. Nie dodawaj nagłówka sceny do blocks, '
-    'ponieważ edytor przechowuje go osobno. Zwróć jedną scenę, nie listę wariantów. '
-    'Przykład: {"blocks":[{"type":"action","text":"Anna otwiera list."},'
-    '{"type":"character","text":"ANNA"},{"type":"parenthetical","text":"(szeptem)"},'
-    '{"type":"dialogue","text":"To niemożliwe."}]}. '
-    'Jeśli scena jest pusta, napisz ją na podstawie instrukcji użytkownika.'
+    'Jesteś polskim scenarzystą. Napisz nowy fragment sceny zgodnie z celem i poleceniem autora. '
+    'Kontynuuj zapisaną scenę bez cytowania ani przepisywania jej końcówki; pustą scenę rozpocznij. '
+    'Zwróć jeden JSON z blocks, bez Markdown. Rodzaje bloków:\n'
+    'action: type, text. Widoczna akcja lub otoczenie, trzecia osoba, czas teraźniejszy. '
+    'Światło i ruchy postaci należą tutaj. Myśli i emocje pokaż gestem lub wypowiedzią.\n'
+    'speech: type, speaker (nazwa postaci), parenthetical (krótka wskazówka aktorska lub null), '
+    'spoken_text (tylko słowa wypowiedziane na głos, bez opisów otoczenia i ruchów). '
+    'Nie twórz osobnych character, dialogue ani parenthetical.\n'
+    'transition: opcjonalne krótkie przejście, type i text np. CIĘCIE DO:, bez nazwy miejsca i pory dnia. '
+    'Nagłówek, Miejsce: i Pora dnia: nie należą do blocks.\n'
+    'Przykład: {"blocks":[{"type":"action","text":"Światło pada na twarz Anny. Anna otwiera list."},'
+    '{"type":"speech","speaker":"ANNA","parenthetical":null,"spoken_text":"To niemożliwe."},'
+    '{"type":"action","text":"Anna odkłada list."}]}. '
 )
 
 
 def scene_generation_prompt(prompt):
     """Use the frozen database snapshot, never scene text supplied by the browser."""
     scene = prompt.context_snapshot['scene']
+    from .screenplay import can_generate_heading
+    heading_instruction = (
+        'Scena jest pusta i nie ma nagłówka. Dodaj heading: '
+        '{"location_type":"WN.", "location_heading":"CHATA", "time_of_day":"ŚWIT"}. '
+        'location_type: WN. (wnętrze) lub PL. (plener); location_heading: sama nazwa miejsca, '
+        'bez prefiksu i pory dnia. Nie powtarzaj nagłówka w blocks.'
+        if can_generate_heading(scene) else
+        'Nie wymyślaj ani nie zwracaj nagłówka. Istniejący nagłówek i pora dnia pozostają bez zmian.'
+    )
+    metadata = scene.get('ai_metadata', {})
+    goal = metadata.get('scene_goal', '')
+    notes = metadata.get('notes', '')
+    style = prompt.context_snapshot.get('writing_style_preferences', {})
+    action_style = 'Zwięzły, techniczny opis widocznej akcji.' if style.get('stage_directions_style') != 'literary_descriptive' else 'Opis może być literacki, ale dotyczy wyłącznie tego, co można pokazać lub usłyszeć.'
+    parentheticals = (
+        'Nie używaj wskazówek w nawiasach; parenthetical zawsze null.'
+        if style.get('parentheticals') == 'ignore' else
+        'Używaj krótkich, konkretnych didaskaliów w nawiasach tam, gdzie pomagają zagrać kwestię: '
+        'dla intencji, pauzy albo zmiany sposobu mówienia wynikającej z sytuacji. Zwykle 1–4 słowa. '
+        'Przeplataj tak oznaczone kwestie ze zwykłymi wypowiedziami; null oznacza brak potrzeby wskazówki, nie zakaz jej użycia. '
+        'Nie dopisuj didaskaliów mechanicznie do każdej kwestii ani nie wymyślaj ich wbrew kontekstowi. '
+        'Samotność postaci nie jest powodem do określania sposobu mówienia ani adresata. '
+        'Ustalony sposób mówienia utrzymuje się w kolejnych kwestiach; oznacz dopiero jego istotną zmianę. '
+        'Unikaj powtarzania wskazówek i zastępowania ich synonimami. Ruchy, gesty i objaśnienia należą do action.'
+    )
+    cast = ', '.join(character['name'] for character in prompt.context_snapshot.get('characters', []))
+    composition = (
+        'Dialog jest opcjonalny. Dobierz akcję i wypowiedzi do sytuacji i polecenia autora; scena może być całkowicie niema. '
+        'Nie dopisuj samotnej postaci monologu tylko po to, żeby powstał dialog. '
+        'Zrób jeden konkretny krok w stronę celu: drobne odkrycie, przeszkodę lub decyzję wynikającą z sytuacji. '
+        'Każdy akapit rozwija ten krok; zastępuj powtarzane pytania i gesty nowym działaniem. '
+        'Pisz wyłącznie to, co kamera widzi lub mikrofon słyszy; emocje wyrażaj zachowaniem. '
+        'Zachowaj ustalone fakty, stan wiedzy bohatera i dokładne imiona. '
+        'Jedna scena ma jedno miejsce i porę dnia. Zakończ fragment przed przejściem z wnętrza w plener lub odwrotnie. '
+        'Domyślnie 3–5 krótkich bloków po 1–2 zdania; długość podana przez autora ma pierwszeństwo. '
+        'Finał to konkretna czynność, trop lub decyzja, bez przedwczesnego rozwiązania całej zagadki.'
+    )
+    location = scene.get('location_heading', '').strip()
+    if location.upper().startswith('WN.'):
+        setting = f'WEWNĄTRZ: {location}. Cała akcja tego fragmentu pozostaje we wnętrzu; zakończ go przed wyjściem bohatera.'
+    elif location.upper().startswith('PL.'):
+        setting = f'PLENER: {location}. Cała akcja tego fragmentu pozostaje na zewnątrz; zakończ go przed wejściem do wnętrza.'
+    else:
+        setting = location or 'Wybierz jedno miejsce dla nagłówka i utrzymaj w nim cały fragment.'
     return (
         f'{prompt.system_prompt}\n\n'
+        f'{heading_instruction}\n\n'
+        f'KOMPOZYCJA SCENY:\n{composition}\n\n'
+        f'ZASADY STYLU:\n{action_style}\n{parentheticals}\n'
+        f'Ton dialogów: {style.get("dialogue_tone", "Neutralny, realistyczny")}\n\n'
+        f'CEL SCENY (kierunek fabularny, nie tekst do przepisania):\n{goal or "(Nie określono.)"}\n'
+        f'NOTATKI AUTORA (kontekst, nie fragment scenariusza):\n{notes or "(Brak.)"}\n'
+        f'POSTACIE WYBRANE DO SCENY:\n{cast or "(Nie wybrano.)"}\n\n'
         f'AKTUALNA SCENA:\n'
         f'Tytuł: {scene["title"]}\n'
         f'Miejsce / nagłówek: {scene["location_heading"]}\n'
         f'Pora dnia: {scene["time_of_day"]}\n'
         f'Treść:\n{scene["content_text"] or "(Scena nie zawiera jeszcze tekstu.)"}\n\n'
-        f'INSTRUKCJA UŻYTKOWNIKA:\n{prompt.user_prompt}'
+        f'INSTRUKCJA UŻYTKOWNIKA:\n{prompt.user_prompt}\n\n'
+        f'KONTROLA PRZED ZWROTEM:\nMiejsce: {setting}\n'
+        f'Pora dnia: {scene.get("time_of_day") or "zgodna z nagłówkiem"}. '
+        'Akcja jest obserwowalna, wypowiedzi opcjonalne, każda wnosi coś nowego. '
+        'Zachowaj pomocne parenthetical, usuń jedynie zbędne i powtórzone wskazówki. '
+        'Zwróć wyłącznie JSON; nie wypisuj tej kontroli w blocks.'
     )
 
 

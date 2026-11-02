@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from ninja import Schema
-from pydantic import ConfigDict, EmailStr, Field
+from pydantic import ConfigDict, EmailStr, Field, field_validator
 
 
 PositiveId = Annotated[int, Field(gt=0)]
@@ -24,8 +24,51 @@ class GeneratedBlock(InputSchema):
     text: str = Field(min_length=1)
 
 
+class GeneratedAction(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    type: Literal['action']
+    text: str = Field(min_length=1, description='Widoczna akcja i opis otoczenia w trzeciej osobie. Bez dialogów ani etykiet miejsca i pory dnia.')
+
+
+class GeneratedSpeech(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    type: Literal['speech']
+    speaker: str = Field(min_length=1, max_length=150, description='Wyłącznie nazwa postaci wypowiadającej słowa.')
+    parenthetical: str | None = Field(max_length=120, description='Krótka, konkretna wskazówka aktorska (zwykle 1–4 słowa), gdy pomaga zagrać kwestię: intencja, pauza lub zmiana sposobu mówienia. Null, gdy zbędna. Bez mechanicznych powtórzeń i opisów czynności.')
+    spoken_text: str = Field(min_length=1, description='Wyłącznie słowa wypowiedziane na głos przez postać. Opis światła, otoczenia, ruchów i narracja należą do action.')
+
+
+class GeneratedTransition(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    type: Literal['transition']
+    text: Literal['CIĘCIE DO:', 'PRZENIKANIE DO:', 'ŚCIEMNIENIE.', 'ROZJAŚNIENIE.',
+                  'CUT TO:', 'DISSOLVE TO:', 'FADE IN:', 'FADE OUT.']
+
+    @field_validator('text', mode='before')
+    @classmethod
+    def uppercase_transition(cls, value):
+        return value.strip().upper() if isinstance(value, str) else value
+
+
 class GeneratedScene(InputSchema):
-    blocks: list[GeneratedBlock] = Field(min_length=1)
+    blocks: list[Annotated[GeneratedAction | GeneratedSpeech | GeneratedTransition, Field(discriminator='type')]] = Field(min_length=1)
+
+
+class GeneratedHeading(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    location_heading: str = Field(min_length=1, max_length=255)
+    time_of_day: str = Field(min_length=1, max_length=50)
+
+
+class ModelHeading(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    location_type: Literal['WN.', 'PL.'] = Field(description='WN. dla wnętrza budynku, PL. dla pleneru.')
+    location_heading: str = Field(min_length=1, max_length=240, description='Sama nazwa miejsca, np. CHATA. Bez prefiksu, etykiety Miejsce i bez pory dnia.')
+    time_of_day: Literal['DZIEŃ', 'NOC', 'RANO', 'ŚWIT', 'WIECZÓR', 'POŁUDNIE', 'PRZEDPOŁUDNIE', 'POPOŁUDNIE', 'ZMIERZCH', 'ZMROK', 'KONTYNUACJA']
+
+
+class GeneratedSceneWithHeading(GeneratedScene):
+    heading: ModelHeading
 
 
 class EditorBlock(GeneratedBlock):

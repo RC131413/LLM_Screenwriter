@@ -20,8 +20,13 @@ describe('application → hooks → API client → HTTP', () => {
       }
       if (call.path === '/variants/70/select') {
         const variant = variantFixture();
-        workspace.scenes[0].content_text = variant.generated_full_text;
-        workspace.scenes[0].editor_metadata = { ...workspace.scenes[0].editor_metadata, blocks: variant.critic_metadata.blocks };
+        workspace.scenes[0].content_text += '\n\n' + variant.generated_full_text;
+        const currentBlocks = workspace.scenes[0].editor_metadata.blocks;
+        const continuation = variant.critic_metadata.blocks;
+        workspace.scenes[0].editor_metadata = {
+          ...workspace.scenes[0].editor_metadata,
+          blocks: [...(Array.isArray(currentBlocks) ? currentBlocks : []), ...(Array.isArray(continuation) ? continuation : [])],
+        };
         return jsonResponse({ ...variant, is_selected: true });
       }
       if (call.path === '/scenes/20/variants') return jsonResponse({ items: generated ? [variantFixture()] : [], count: generated ? 1 : 0 });
@@ -41,10 +46,10 @@ describe('application → hooks → API client → HTTP', () => {
     expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog', generation_id: expect.any(String) });
     expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
     await user.click(screen.getByRole('button', { name: 'Zastosuj wybrany wariant' }));
-    expect(await screen.findByLabelText('Postać 1')).toHaveValue('ANNA');
-    expect(screen.getByLabelText('Dialog 2')).toHaveValue('Znalazłam list.');
-    expect(screen.queryByLabelText('Akcja 1')).not.toBeInTheDocument();
-    expect(http.workspace.scenes[0].editor_metadata.blocks).toEqual(variantFixture().critic_metadata.blocks);
+    expect(await screen.findByLabelText('Postać 2')).toHaveValue('ANNA');
+    expect(screen.getByLabelText('Dialog 3')).toHaveValue('Znalazłam list.');
+    expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
+    expect(http.workspace.scenes[0].content_text).toBe('Najnowszy tekst sceny.\n\n' + variantFixture().generated_full_text);
   });
 
   it('saves location and time separately from the visible heading field and restores them after remount', async () => {

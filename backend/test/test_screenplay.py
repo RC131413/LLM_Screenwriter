@@ -12,9 +12,7 @@ class ScreenplayFormatTests(SimpleTestCase):
     def test_generates_editor_ids_and_normalizes_each_supported_block_type(self):
         blocks = generated_scene_blocks(json.dumps({'blocks': [
             {'type': 'action', 'text': '  Anna otwiera kopertę.  '},
-            {'type': 'character', 'text': 'Anna'},
-            {'type': 'parenthetical', 'text': 'szeptem'},
-            {'type': 'dialogue', 'text': 'Znalazłam list.'},
+            {'type': 'speech', 'speaker': 'Anna', 'parenthetical': 'szeptem', 'spoken_text': 'Znalazłam list.'},
             {'type': 'transition', 'text': 'cięcie do:'},
         ]}))
         self.assertEqual([block['type'] for block in blocks], ['action', 'character', 'parenthetical', 'dialogue', 'transition'])
@@ -29,6 +27,7 @@ class ScreenplayFormatTests(SimpleTestCase):
         answers = [
             'not json', '{"blocks":[', '{}', '[]', '{"blocks":[]}',
             json.dumps({'blocks': [{'type': 'heading', 'text': 'WN. DOM'}]}),
+            json.dumps({'blocks': [{'type': 'transition', 'text': 'CIĘCIE DO: WN. CHATA - ŚWIT'}]}),
             json.dumps({'blocks': [{'type': 'action', 'text': '  '}]}),
             json.dumps({'blocks': [{'type': 'action', 'text': 'Text', 'id': 'model-id'}]}),
             json.dumps({'variants': [{'blocks': [{'type': 'action', 'text': 'Text'}]}]}),
@@ -37,13 +36,17 @@ class ScreenplayFormatTests(SimpleTestCase):
             with self.subTest(answer=answer), self.assertRaises(OllamaError):
                 generated_scene_blocks(answer)
 
-    def test_rejects_dialogue_without_a_speaker_and_unfinished_character_cues(self):
+    def test_rejects_separate_dialogue_cues_and_incomplete_speech_groups(self):
         for items in (
             [{'type': 'dialogue', 'text': 'Hello'}],
             [{'type': 'parenthetical', 'text': '(cicho)'}],
             [{'type': 'character', 'text': 'ANNA'}],
             [{'type': 'character', 'text': 'ANNA'}, {'type': 'action', 'text': 'Wychodzi.'}],
-            [{'type': 'character', 'text': 'ANNA'}, {'type': 'parenthetical', 'text': '()'}, {'type': 'dialogue', 'text': 'Hello'}],
+            [{'type': 'speech', 'speaker': 'ANNA', 'parenthetical': '()', 'spoken_text': 'Hello'}],
+            [{'type': 'speech', 'speaker': '', 'parenthetical': None, 'spoken_text': 'Hello'}],
+            [{'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None, 'spoken_text': ' '}],
+            [{'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None}],
+            [{'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None, 'spoken_text': 'Hello', 'after_dialogue': '(cicho)'}],
         ):
             with self.subTest(items=items), self.assertRaises(OllamaError):
                 generated_scene_blocks(json.dumps({'blocks': items}))
@@ -51,10 +54,20 @@ class ScreenplayFormatTests(SimpleTestCase):
     def test_supports_action_only_scenes_and_multiple_dialogue_paragraphs(self):
         self.assertEqual(generated_scene_blocks('{"blocks":[{"type":"action","text":"Cisza."}]}')[0]['text'], 'Cisza.')
         blocks = generated_scene_blocks(json.dumps({'blocks': [
-            {'type': 'character', 'text': 'ANNA'}, {'type': 'dialogue', 'text': 'Czekaj.'},
-            {'type': 'parenthetical', 'text': '(ciszej)'}, {'type': 'dialogue', 'text': 'Ktoś tu jest.'},
+            {'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None, 'spoken_text': 'Czekaj.'},
+            {'type': 'speech', 'speaker': 'ANNA', 'parenthetical': '(ciszej)', 'spoken_text': 'Ktoś tu jest.'},
         ]}))
-        self.assertEqual(len(blocks), 4)
+        self.assertEqual([block['type'] for block in blocks], ['character', 'dialogue', 'character', 'parenthetical', 'dialogue'])
+
+    def test_environment_and_physical_action_remain_action_around_a_speech(self):
+        narrative = 'Promienie słońca wpadające przez okno oświetlają jego twarz.'
+        blocks = generated_scene_blocks(json.dumps({'blocks': [
+            {'type': 'action', 'text': narrative},
+            {'type': 'speech', 'speaker': 'MAĆKO', 'parenthetical': 'z nadzieją', 'spoken_text': 'Dobry Boże, czy to się dzieje naprawdę?'},
+            {'type': 'action', 'text': 'Maćko wstaje z łóżka i podchodzi do okna.'},
+        ]}))
+        self.assertEqual([block['type'] for block in blocks], ['action', 'character', 'parenthetical', 'dialogue', 'action'])
+        self.assertEqual(blocks[0]['text'], narrative)
 
     def test_invalid_persisted_blocks_are_rejected_before_applying(self):
         for value in ([], {}, [{'id': 'x', 'type': 'unknown', 'text': 'X'}],

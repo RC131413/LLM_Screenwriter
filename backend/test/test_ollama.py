@@ -33,7 +33,7 @@ class OllamaClientTests(SimpleTestCase):
         self.assertEqual(payload['model'], OLLAMA_MODEL)
         self.assertEqual(payload['prompt'], 'Napisz krótką odpowiedź.')
         self.assertIs(payload['stream'], True)
-        self.assertEqual(payload['options'], {'num_predict': 128, 'temperature': 0.7, 'num_gpu': OLLAMA_GPU_LAYERS})
+        self.assertEqual(payload['options'], {'num_predict': 128, 'temperature': 0.7, 'num_gpu': OLLAMA_GPU_LAYERS, 'num_batch': 128})
         self.assertEqual(request.kwargs['headers']['Content-Type'], 'application/json')
         transport.return_value.close.assert_called_once()
 
@@ -43,7 +43,7 @@ class OllamaClientTests(SimpleTestCase):
         generate('Test', base_url='http://127.0.0.1:11435/', timeout=10, temperature=0.3, max_tokens=512)
         transport.assert_called_once_with('127.0.0.1', 11435, timeout=10)
         payload = json.loads(transport.return_value.request.call_args.kwargs['body'])
-        self.assertEqual(payload['options'], {'num_predict': 512, 'temperature': 0.3, 'num_gpu': 99})
+        self.assertEqual(payload['options'], {'num_predict': 512, 'temperature': 0.3, 'num_gpu': 99, 'num_batch': 128})
         self.assertEqual(payload['model'], OLLAMA_MODEL)
 
     @patch('backend.ollama.HTTPConnection')

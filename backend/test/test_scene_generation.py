@@ -10,12 +10,19 @@ from backend.api.scheams import GeneratedScene
 from ._api_base import ApiTestCase
 
 GENERATED_SCENE = json.dumps({'blocks': [
-    {'type': 'character', 'text': 'ANNA'}, {'type': 'dialogue', 'text': 'Znalazłam list.'},
+    {'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None, 'spoken_text': 'Znalazłam list.'},
 ]}, ensure_ascii=False)
 
 
+def generation_answer(*args, **kwargs):
+    answer = json.loads(GENERATED_SCENE)
+    if 'heading' in kwargs['output_schema']['properties']:
+        answer['heading'] = {'location_type': 'WN.', 'location_heading': 'DOM', 'time_of_day': 'RANO'}
+    return json.dumps(answer, ensure_ascii=False)
+
+
 class SceneGenerationTests(ApiTestCase):
-    @patch('backend.ollama.generate', return_value=GENERATED_SCENE)
+    @patch('backend.ollama.generate', side_effect=generation_answer)
     def test_current_database_scene_and_user_instruction_produce_a_persisted_variant(self, generate_text):
         self.scene.content_text = 'Aktualna treść zapisana w bazie.'
         self.scene.location_heading = 'WN. POCIĄG'
@@ -58,7 +65,7 @@ class SceneGenerationTests(ApiTestCase):
         stored = self.assert_status(self.send('get', f'/variants/{variant.pk}'), 200).json()
         self.assertEqual(stored['generated_full_text'], generated['generated_full_text'])
 
-    @patch('backend.ollama.generate', return_value=GENERATED_SCENE)
+    @patch('backend.ollama.generate', side_effect=generation_answer)
     def test_uses_saved_preferences_and_allows_valid_parameter_overrides(self, generate_text):
         self.assert_status(self.send('put', '/users/me/preferences', {
             'llm_preferences': {'temperature': 0.3, 'max_tokens': 512},
@@ -71,6 +78,24 @@ class SceneGenerationTests(ApiTestCase):
         }), 201)
         self.assertEqual(generate_text.call_args.kwargs['temperature'], 0.2)
         self.assertEqual(generate_text.call_args.kwargs['max_tokens'], 128)
+
+    @patch('backend.ollama.generate', side_effect=generation_answer)
+    def test_saved_scene_goal_notes_cast_and_style_are_sent_to_the_model(self, generate_text):
+        self.assert_status(self.send('patch', f'/scenes/{self.scene.pk}', {
+            'ai_metadata': {'scene_goal': 'Anna rozpoznaje pismo ojca.', 'notes': 'List pozostaje nieotwarty.'},
+        }), 200)
+        self.assert_status(self.send('put', '/users/me/preferences', {
+            'writing_style_preferences': {'stage_directions_style': 'concise_technical',
+                                          'dialogue_tone': 'Nerwowy', 'parentheticals': 'ignore'},
+        }), 200)
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Kontynuuj.'}), 201)
+        text = generate_text.call_args.args[0]
+        for expected in ('Anna rozpoznaje pismo ojca.', 'List pozostaje nieotwarty.', 'ANNA',
+                         'Ton dialogów: Nerwowy', 'parenthetical zawsze null', 'CEL SCENY'):
+            self.assertIn(expected, text)
+        run = GenerationRun.objects.get(request__user_prompt='Kontynuuj.')
+        self.assertEqual(run.request.context_snapshot['scene']['ai_metadata']['scene_goal'], 'Anna rozpoznaje pismo ojca.')
+        self.assertNotIn('scene_goal', SceneVariant.objects.get(run=run).generated_full_text)
 
     @patch('backend.ollama.generate')
     def test_requires_session_csrf_and_scene_ownership_before_contacting_ollama(self, generate_text):
@@ -109,9 +134,10 @@ class SceneGenerationTests(ApiTestCase):
                 self.assertEqual(run.variants.count(), 0)
         self.assertEqual(SceneVariant.objects.count(), before)
 
-    @patch('backend.ollama.generate', return_value=GENERATED_SCENE)
+    @patch('backend.ollama.generate', side_effect=generation_answer)
     def test_can_generate_for_an_empty_scene(self, generate_text):
-        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Napisz scenę spotkania.'}), 201)
+        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Napisz scenę spotkania.'}), 201)
+        self.assertEqual(response.json()['critic_metadata']['heading'], {'location_heading': 'WN. DOM', 'time_of_day': 'RANO'})
         self.assertIn('(Scena nie zawiera jeszcze tekstu.)', generate_text.call_args.args[0])
 
     @patch('backend.ollama.generate')

@@ -131,12 +131,18 @@ running it again: `docker compose up -d --build db_setup`.
 
 `backend/ollama.py` exposes `generate(prompt: str) -> str`. It sends UTF-8 JSON to
 `http://127.0.0.1:11434/api/generate` using Python's standard library, with
-`stream: false` and a 120-second timeout. Optional `temperature` and `max_tokens`
+an internally buffered NDJSON stream and a 120-second socket timeout. Partial
+tokens are never sent to the frontend. Optional `temperature` and `max_tokens`
 keyword arguments control generation. The scene endpoint uses saved AI preferences
 (by default temperature 0.7 and 2048 output tokens), unless the request overrides them.
 The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
 Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
 The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
+Requests explicitly set `num_gpu: 99` to offload all layers of the fixed Bielik
+model to the GPU. On the development RTX 3060 Ti (8 GB), `ollama ps` verified
+`100% GPU` with the original 4096-token context, compared to automatic 83% GPU /
+17% CPU loading. GPU fit depends on free VRAM; `ollama ps` reports model placement,
+as described in [Ollama's FAQ](https://docs.ollama.com/faq#how-can-i-tell-if-my-model-was-loaded-onto-the-gpu).
 Scene generation supplies a JSON schema through Ollama's `format` field, following
 its [structured-output API](https://docs.ollama.com/capabilities/structured-outputs).
 
@@ -155,7 +161,7 @@ POST /api/scenes/{scene_id}/generate
 Content-Type: application/json
 X-CSRFToken: <current CSRF token>
 
-{"user_prompt": "Dodaj krótki dialog o odnalezionym liście."}
+{"user_prompt": "Dodaj krótki dialog o odnalezionym liście.", "generation_id": "00000000-0000-4000-8000-000000000001"}
 ```
 
 The server verifies scene ownership and reads its current text and heading from
@@ -170,6 +176,24 @@ text in `generated_full_text`. Prompt history, a real `GenerationRun` and its
 `completed` or `failed`, with timing and error details. No agents or LangGraph are
 used and no `AgentExecution` rows are created. The original scene is preserved
 until the user clicks "Zastosuj wybrany wariant".
+
+The red "Anuluj generowanie" button below "Generuj scenę" sends an authenticated,
+CSRF-protected `POST /api/scenes/{scene_id}/cancel-generation` with the same
+`generation_id` UUID and `user_prompt`. The generation ID is optional for direct
+generation clients, but the frontend always creates one to support cancellation.
+The cancellation endpoint marks that specific run `cancelled`; an Ollama watcher
+checks the shared database and shuts down the upstream socket, including during
+initial model loading/prefill. The client discards buffered tokens. Generation
+and cancellation serialize their final writes using the project lock, so a
+cancel racing the final token also discards that run's result. Other runs and
+their variants are preserved. Cancellation arriving before generation creates a
+cancelled request marker, preventing a delayed generation request from starting.
+No new database column or migration is required; the UUID uses `run_metadata`.
+
+The UI waits for cancellation acknowledgement before reporting success. It ignores
+racing late responses, retains the prompt, and offers cancellation retry on a
+network failure. Cancelled runs do not display a variant, including after reload.
+Cancelling while the editor save is pending prevents the LLM request entirely.
 
 Each generation returns exactly one scene as an ordered `blocks` array. Allowed
 types match the manual editor: `action`, `character`, `dialogue`, `parenthetical`,
@@ -193,6 +217,11 @@ variants remain readable/applicable as plain text; they are not retroactively cl
 The assistant shows "Generowanie...", then the actual generated text. It refreshes
 history/variants and ignores late responses after a scene switch. Failed requests
 retain the input for retry. The old `/api/llm/ping` endpoint has been removed.
+The saved-variants panel requests only the newest variant (`limit=1`) for the scene,
+including on page reload. A successful generation replaces the visible result;
+older variants remain in the database as history. The refresh button only reloads
+the latest saved variant and run status via GET requests. It does not cancel
+generation or return partial output and is disabled while generating.
 Responses have `Cache-Control: no-store`.
 Unavailable Ollama returns 503, a timeout 504, and a missing model or invalid
 upstream response 502 with a descriptive `detail`. The client never downloads
@@ -231,6 +260,7 @@ Paths below are relative to `/api` and do not have trailing slashes:
 | Characters | `GET/POST /projects/{id}/characters`, `GET/PATCH/DELETE /characters/{id}` |
 | Scenes | `GET/POST /projects/{id}/scenes`, `GET/PATCH/DELETE /scenes/{id}` |
 | Local generation | `POST /scenes/{id}/generate` |
+| Cancel generation | `POST /scenes/{id}/cancel-generation` |
 | Cast | `GET/POST /scenes/{id}/cast`, `GET/PATCH/DELETE /cast/{id}` |
 | Prompt history | `GET/POST /scenes/{id}/prompts`, `GET /prompts/{id}`, `GET /prompts/{id}/run` |
 | Generation runs | `GET /scenes/{id}/runs`, `GET /runs/{id}` |
@@ -364,8 +394,10 @@ The backend suite is divided into:
 - `test_models.py`, `test_seed.py`: ERD constraints, JSON defaults, cascades and seeding.
 - `test_workspace_flow.py`: complete editor payloads, dashboard actions, cast,
   scene moves and prompt snapshots surviving logout and a fresh login.
-- `test_ollama.py`: fixed-model HTTP requests, response validation, connection and
-  timeout failures, and removal of the temporary ping endpoint (without a live LLM).
+- `test_ollama.py`: GPU options, streamed HTTP responses, connection/timeout failures,
+  and cancellation with actual local sockets before headers and after partial tokens.
+- `test_generation_cancel.py`: authenticated/CSRF-protected cancellation, early/late
+  cancellation races, duplicate UUIDs and preservation of unrelated variants.
 - `test_scene_generation.py`: persisted scene context, authenticated/CSRF-protected
   generation, preferences, failed runs and variants, with Ollama mocked at the HTTP-client boundary.
 - `test_screenplay.py`: structured output validation, block IDs/types, speaker ordering,
@@ -389,7 +421,7 @@ npm run build
 
 `npm run test:watch` runs Vitest in watch mode. Test organization:
 
-- `tests/api/`: CSRF, transport failures, request options and all 52 API operations.
+- `tests/api/`: CSRF, transport failures, request options and all 53 API operations.
 - `tests/hooks/`: session restoration/expiry/logout, account preferences, profile,
   project loading, debounced scene saves, cast, undo/redo, structure and prompt history.
 - `tests/services/`: DTO mapping, pagination, metadata preservation and error messages.

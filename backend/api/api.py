@@ -3,6 +3,7 @@
 from datetime import timedelta
 from time import perf_counter
 from typing import Literal
+from uuid import uuid4
 
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
@@ -31,7 +32,7 @@ from .models import (
 )
 from .services import (
     SCENE_GENERATION_SYSTEM_PROMPT,
-    get_owned, lock_project, owned, profile_for, prompt_snapshot,
+    generation_is_cancelled, get_owned, lock_project, owned, profile_for, prompt_snapshot,
     save_validated, scene_generation_prompt, validate_avatar,
 )
 
@@ -460,35 +461,38 @@ def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', syste
 
 
 @api.post('/scenes/{scene_id}/generate',
-          response={201: s.VariantOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
-def generate_scene(request, scene_id: s.PositiveId, payload: s.PromptIn, response: HttpResponse):
+          response={201: s.VariantOut, 409: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
+def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, response: HttpResponse):
     """One synchronous Ollama call, backed by existing history/run/variant records."""
     response['Cache-Control'] = 'no-store'
     if not payload.user_prompt.strip():
         raise ValidationError({'user_prompt': 'Wpisz instrukcję dla modelu.'})
-    prompt = _create_prompt(
-        request, scene_id, payload, model_name=ollama.OLLAMA_MODEL,
-        system_prompt=SCENE_GENERATION_SYSTEM_PROMPT,
-    )
-    run = save_validated(GenerationRun(request=prompt, status='running', started_at=timezone.now()))
+    run = _prepare_generation(request, scene_id, payload)
+    if run.status == 'cancelled':
+        return 409, {'detail': 'Generowanie zostało anulowane.'}
+    prompt = run.request
     started = perf_counter()
     # No database transaction or row lock is held during the slow HTTP request.
     try:
         answer = ollama.generate(
             scene_generation_prompt(prompt), output_schema=s.GeneratedScene.model_json_schema(),
+            is_cancelled=lambda: generation_is_cancelled(run.pk),
             **prompt.generation_parameters,
         )
         blocks = generated_scene_blocks(answer)
     except ollama.OllamaError as error:
         finished = timezone.now()
-        GenerationRun.objects.filter(pk=run.pk).update(
-            status='failed', finished_at=finished, updated_at=finished,
+        GenerationRun.objects.filter(pk=run.pk, status='running').update(
+            status='cancelled' if isinstance(error, ollama.OllamaCancelled) else 'failed', finished_at=finished, updated_at=finished,
             total_duration_ms=int((perf_counter() - started) * 1000), error_message=str(error),
         )
         return error.status_code, {'detail': str(error)}
     with transaction.atomic():
+        lock_project(request.auth, prompt.scene.project_id)
         # A scene can have been deleted while Ollama was generating its response.
         run = get_object_or_404(GenerationRun.objects.select_for_update(), pk=run.pk)
+        if run.status == 'cancelled':
+            return 409, {'detail': 'Generowanie zostało anulowane.'}
         variant = save_validated(SceneVariant(
             run=run, scene_id=prompt.scene_id, variant_number=1,
             title='Wariant Bielika', generated_full_text=blocks_text(blocks),
@@ -499,6 +503,40 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.PromptIn, respons
             'total_duration_ms': int((perf_counter() - started) * 1000),
         })
     return 201, variant
+
+
+@transaction.atomic
+def _prepare_generation(request, scene_id, payload, *, cancelled=False):
+    scene = get_owned(Scene, request.auth, scene_id)
+    lock_project(request.auth, scene.project_id)
+    generation_id = str(payload.generation_id or uuid4())
+    existing = GenerationRun.objects.select_related('request').filter(
+        request__scene=scene, run_metadata__generation_id=generation_id,
+    ).first()
+    if existing is not None:
+        if not cancelled and existing.status != 'cancelled':
+            raise HttpError(409, 'To żądanie generowania zostało już przyjęte.')
+        return existing
+    prompt = _create_prompt(
+        request, scene_id, payload, model_name=ollama.OLLAMA_MODEL,
+        system_prompt=SCENE_GENERATION_SYSTEM_PROMPT,
+    )
+    return save_validated(GenerationRun(
+        request=prompt, status='cancelled' if cancelled else 'running', started_at=timezone.now(),
+        finished_at=timezone.now() if cancelled else None, run_metadata={'generation_id': generation_id},
+    ))
+
+
+@api.post('/scenes/{scene_id}/cancel-generation', response=s.MessageOut, tags=['LLM'])
+@transaction.atomic
+def cancel_generation(request, scene_id: s.PositiveId, payload: s.CancelGenerationIn):
+    if not payload.user_prompt.strip():
+        raise ValidationError({'user_prompt': 'Wpisz instrukcję dla modelu.'})
+    run = _prepare_generation(request, scene_id, payload, cancelled=True)
+    # Serialize with completion, including a cancellation racing the final token.
+    run.variants.all().delete()
+    save_validated(run, {'status': 'cancelled', 'finished_at': timezone.now(), 'error_message': ''})
+    return {'detail': 'Generowanie anulowane. Nie zapisano wariantu.'}
 
 
 @api.get('/prompts/{prompt_id}', response=s.PromptOut, tags=['Prompt history'])

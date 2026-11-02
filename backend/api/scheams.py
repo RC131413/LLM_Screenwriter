@@ -3,6 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from ninja import Schema
 from pydantic import ConfigDict, EmailStr, Field
@@ -233,6 +234,14 @@ class GenerationParametersIn(InputSchema):
 class PromptIn(InputSchema):
     user_prompt: str = Field(min_length=1, max_length=32000)
     generation_parameters: GenerationParametersIn | None = None
+
+
+class GenerateSceneIn(PromptIn):
+    generation_id: UUID | None = None
+
+
+class CancelGenerationIn(PromptIn):
+    generation_id: UUID
 
 
 class PromptOut(Schema):

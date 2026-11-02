@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, CheckCheck, ChevronRight, History, LoaderCircle, Play, RotateCcw, X } from 'lucide-react';
 import { api } from '../services/api';
 import type { ApiRunDetail, ApiSceneVariant } from '../services/api';
-import { allPages, errorMessage } from '../services/workspaceData';
+import { errorMessage } from '../services/workspaceData';
 import { checkScene } from '../services/sceneValidation';
 import type { Project, Scene } from '../types';
 import { formatAct, screenplayModel } from '../types';
@@ -20,6 +20,15 @@ interface Props {
   onPrepare: () => Promise<void>; onApply: (variantId: number) => Promise<void>; onClose: () => void;
 }
 
+interface PendingGeneration {
+  controller: AbortController;
+  sceneId: string;
+  generationId: string;
+  prompt: string;
+  submitted: boolean;
+  cancelRequested: boolean;
+}
+
 export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, onApply, onClose }: Props) {
   const [tab, setTab] = useState<'generate' | 'context' | 'check'>('generate');
   const [brief, setBrief] = useState('');
@@ -33,7 +42,9 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, 
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const generationRequest = useRef<AbortController | null>(null);
+  const generationRequest = useRef<PendingGeneration | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelNotice, setCancelNotice] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [version, setVersion] = useState(0);
   const promptHistory = usePromptHistory(project.id, scene?.id);
@@ -41,7 +52,8 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, 
   useEffect(() => {
     setBrief(''); setHistoryOpen(false); setPreview(undefined); setFindings(null);
     setVariants([]); setRun(null); setSelected(undefined); setError(''); setPending(false); setGenerating(false);
-    return () => { generationRequest.current?.abort(); generationRequest.current = null; };
+    setCancelling(false); setCancelNotice('');
+    return () => { generationRequest.current?.controller.abort(); generationRequest.current = null; };
   }, [sceneId]);
   useEffect(() => { setFindings(null); }, [scene]);
   useEffect(() => {
@@ -53,13 +65,14 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, 
       try {
         const options = { signal: controller.signal };
         const [stored, runs] = await Promise.all([
-          allPages(params => api.variants.listForScene(Number(sceneId), params, options), controller.signal),
+          api.variants.listForScene(Number(sceneId), { limit: 1 }, options),
           api.runs.list(Number(sceneId), { limit: 1 }, options),
         ]);
         const detail = runs.items[0] ? await api.runs.get(runs.items[0].id, options) : null;
         if (controller.signal.aborted) return;
-        setVariants(stored); setRun(detail);
-        setSelected(previous => stored.some(variant => variant.id === previous) ? previous : stored.find(variant => variant.is_selected)?.id ?? stored[0]?.id);
+        const latest = detail?.status === 'cancelled' ? [] : stored.items.slice(0, 1);
+        setVariants(latest); setRun(detail);
+        setSelected(latest[0]?.id);
         if (detail && ['pending', 'running'].includes(detail.status)) timer = setTimeout(() => void load(), 3000);
       } catch (failure) { if (!controller.signal.aborted) setLoadError(errorMessage(failure)); }
       finally { if (!controller.signal.aborted) setLoading(false); }
@@ -82,20 +95,50 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, 
   async function generateScene() {
     if (!scene || !brief.trim() || pending) return;
     const controller = new AbortController();
-    generationRequest.current = controller;
-    setPending(true); setGenerating(true); setError('');
+    const operation: PendingGeneration = {
+      controller, sceneId: scene.id, generationId: crypto.randomUUID(), prompt: brief.trim(),
+      submitted: false, cancelRequested: false,
+    };
+    generationRequest.current = operation;
+    setPending(true); setGenerating(true); setError(''); setCancelNotice('');
     try {
       await onPrepare();
       controller.signal.throwIfAborted();
-      const variant = await api.scenes.generate(Number(scene.id), { user_prompt: brief.trim() }, { signal: controller.signal });
-      if (controller.signal.aborted) return;
-      setVariants(current => [variant, ...current.filter(item => item.id !== variant.id)]);
+      operation.submitted = true;
+      const variant = await api.scenes.generate(Number(scene.id), {
+        user_prompt: operation.prompt, generation_id: operation.generationId,
+      }, { signal: controller.signal });
+      if (controller.signal.aborted || operation.cancelRequested) return;
+      setVariants([variant]);
       setSelected(variant.id); setVersion(value => value + 1);
-    } catch (failure) { if (!controller.signal.aborted) setError(errorMessage(failure)); }
+    } catch (failure) { if (!controller.signal.aborted && !operation.cancelRequested) setError(errorMessage(failure)); }
     finally {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && !operation.cancelRequested) {
         generationRequest.current = null;
         setPending(false); setGenerating(false); promptHistory.retry();
+      }
+    }
+  }
+  async function cancelGeneration() {
+    const operation = generationRequest.current;
+    if (!operation || cancelling) return;
+    operation.cancelRequested = true;
+    setCancelling(true); setError('');
+    try {
+      if (operation.submitted) await api.scenes.cancelGeneration(Number(operation.sceneId), {
+        generation_id: operation.generationId, user_prompt: operation.prompt,
+      });
+      operation.controller.abort();
+      if (generationRequest.current !== operation) return;
+      generationRequest.current = null;
+      setGenerating(false); setPending(false); setCancelling(false);
+      setVariants([]); setSelected(undefined); setPreview(undefined);
+      setCancelNotice('Generowanie anulowane. Nie zapisano wariantu.');
+      setVersion(value => value + 1); promptHistory.retry();
+    } catch (failure) {
+      if (generationRequest.current === operation) {
+        setCancelling(false);
+        setError(`Nie udało się potwierdzić anulowania. Spróbuj ponownie. ${errorMessage(failure)}`);
       }
     }
   }
@@ -115,12 +158,14 @@ export function AssistantPanel({ project, scene, onSelect, onChange, onPrepare, 
         <section className="panel-section"><div className="prompt-field-heading"><label className="field-label" htmlFor="scene-brief">Kierunek sceny</label><IconButton className="prompt-history-trigger" label="Historia promptów" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)}><History size={16} /><small>{promptHistory.entries.length}</small></IconButton></div>
           <textarea id="scene-brief" className="field-textarea" maxLength={32000} rows={4} value={brief} disabled={pending} onChange={event => setBrief(event.target.value)} />
           <button className="button primary full-width" disabled={pending || !brief.trim()} onClick={() => void generateScene()}>{generating ? <LoaderCircle size={14} className="spin" /> : <Play size={14} />}{generating ? 'Generowanie...' : 'Generuj scenę'}</button>
-          {generating && <p role="status" className="small generation-message">Generowanie... Oczekiwanie na odpowiedź Bielika.</p>}
+          <button className="button cancel-generation full-width" disabled={!generating || cancelling} onClick={() => void cancelGeneration()}><X size={14} />{cancelling ? 'Anulowanie...' : 'Anuluj generowanie'}</button>
+          {generating && <p role="status" className="small generation-message">{cancelling ? 'Anulowanie... Zatrzymywanie generowania.' : 'Generowanie... Oczekiwanie na odpowiedź Bielika.'}</p>}
+          {cancelNotice && <p role="status" className="small generation-message">{cancelNotice}</p>}
           {(error || loadError) && <p className="form-error" role="alert">{error || loadError}</p>}
         </section>
         {chosen && <section className="panel-section" aria-label="Wynik generowania"><h3>Wynik generowania</h3><div className="generated-scene-text"><ScreenplayPreview variant={chosen} /></div></section>}
         {!generating && (loading ? <RequestState loading /> : <AgentProgress run={run} />)}
-        <section className="panel-section variants-section"><div className="prompt-field-heading"><span className="eyebrow">ZAPISANE WARIANTY</span><IconButton label="Odśwież warianty i przebieg" disabled={loading || pending} onClick={() => setVersion(value => value + 1)}><RotateCcw size={15} /></IconButton></div>
+        <section className="panel-section variants-section"><div className="prompt-field-heading"><span className="eyebrow">ZAPISANE WARIANTY</span><IconButton label="Odśwież warianty i przebieg" title="Pobierz ponownie ostatni zapisany wariant i status. Nie zatrzymuje generowania." disabled={loading || pending} onClick={() => setVersion(value => value + 1)}><RotateCcw size={15} /></IconButton></div>
           {!loading && !variants.length && <p className="muted small">Brak wariantów dla tej sceny.</p>}
           <div className="variant-list">{variants.map(variant => <div key={variant.id} className={`variant-item ${selected === variant.id ? 'selected' : ''}`}><label><input type="radio" name="scene-variant" disabled={pending} checked={selected === variant.id} onChange={() => void chooseVariant(variant.id)} /><strong>{variant.title || `Wariant ${variant.variant_number}`}</strong></label>
             <p>{variant.critic_feedback || 'Brak oceny krytyka.'}</p>{variant.critic_score !== null && <small>Ocena: {variant.critic_score}</small>}<button className="text-button" onClick={() => setPreview(variant)}>Podgląd tekstu<ChevronRight size={13} /></button>

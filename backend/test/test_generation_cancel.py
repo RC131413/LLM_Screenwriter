@@ -1,0 +1,89 @@
+import json
+from unittest.mock import patch
+from uuid import uuid4
+
+from django.test import Client
+
+from backend.api.models import GenerationRun, SceneGenerationRequest, SceneVariant
+from backend.ollama import OllamaCancelled
+from ._api_base import ApiTestCase
+
+
+ANSWER = json.dumps({'blocks': [{'type': 'action', 'text': 'Nowa scena.'}]})
+
+
+class GenerationCancellationTests(ApiTestCase):
+    def payload(self):
+        return {'generation_id': str(uuid4()), 'user_prompt': 'Napisz scenę.'}
+
+    def cancel(self, payload, scene_id=None):
+        return self.send('post', f'/scenes/{scene_id or self.scene.pk}/cancel-generation', payload)
+
+    @patch('backend.ollama.generate')
+    def test_cancel_arriving_before_generate_prevents_any_model_call(self, generate):
+        payload = self.payload()
+        count = SceneGenerationRequest.objects.count()
+        self.assert_status(self.cancel(payload), 200)
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 409)
+        self.assertEqual(SceneGenerationRequest.objects.count(), count + 1)
+        run = GenerationRun.objects.get(run_metadata__generation_id=payload['generation_id'])
+        self.assertEqual(run.status, 'cancelled')
+        self.assertEqual(run.variants.count(), 0)
+        generate.assert_not_called()
+
+    @patch('backend.ollama.generate')
+    def test_cancel_during_model_call_does_not_save_partial_output(self, generate):
+        payload = self.payload()
+
+        def cancelled_model(*args, **kwargs):
+            self.assertTrue(callable(kwargs['is_cancelled']))
+            self.assert_status(self.cancel(payload), 200)
+            raise OllamaCancelled()
+
+        generate.side_effect = cancelled_model
+        before = SceneVariant.objects.count()
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 409)
+        run = GenerationRun.objects.get(run_metadata__generation_id=payload['generation_id'])
+        self.assertEqual(run.status, 'cancelled')
+        self.assertIsNotNone(run.finished_at)
+        self.assertEqual(SceneVariant.objects.count(), before)
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.content_text, '')
+
+    @patch('backend.ollama.generate')
+    def test_cancellation_wins_a_race_with_the_final_token(self, generate):
+        payload = self.payload()
+
+        def final_token(*args, **kwargs):
+            self.assert_status(self.cancel(payload), 200)
+            return ANSWER
+
+        generate.side_effect = final_token
+        before = SceneVariant.objects.count()
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 409)
+        self.assertEqual(SceneVariant.objects.count(), before)
+
+    @patch('backend.ollama.generate', return_value=ANSWER)
+    def test_late_cancel_discards_only_its_own_result_and_is_idempotent(self, generate):
+        payload = self.payload()
+        variant = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 201).json()
+        self.assert_status(self.cancel(payload), 200)
+        self.assert_status(self.cancel(payload), 200)
+        self.assertFalse(SceneVariant.objects.filter(pk=variant['id']).exists())
+        self.assertTrue(SceneVariant.objects.filter(pk=self.variant.pk).exists())
+        self.assertEqual(GenerationRun.objects.get(pk=variant['run_id']).status, 'cancelled')
+
+    @patch('backend.ollama.generate', return_value=ANSWER)
+    def test_duplicate_generation_id_does_not_start_a_second_generation(self, generate):
+        payload = self.payload()
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 201)
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 409)
+        generate.assert_called_once()
+
+    def test_cancel_requires_authentication_csrf_and_scene_ownership(self):
+        payload = self.payload()
+        path = f'/scenes/{self.scene.pk}/cancel-generation'
+        self.assert_status(self.send('post', path, payload, client=Client(enforce_csrf_checks=True)), 401)
+        self.assert_status(self.send('post', path, payload, csrf=False), 403)
+        self.assert_status(self.cancel(payload, self.foreign_scene.pk), 404)
+        self.assert_status(self.cancel({**payload, 'generation_id': 'not-a-uuid'}), 422)

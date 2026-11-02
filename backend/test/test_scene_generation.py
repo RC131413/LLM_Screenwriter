@@ -35,9 +35,11 @@ class SceneGenerationTests(ApiTestCase):
         for expected in ('Aktualna treść zapisana w bazie.', 'WN. POCIĄG', 'NOC', 'Dodaj krótki dialog o liście.'):
             self.assertIn(expected, text)
         generate_text.assert_called_once()
-        self.assertEqual(generate_text.call_args.kwargs, {
-            'temperature': 0.7, 'max_tokens': 2048, 'output_schema': GeneratedScene.model_json_schema(),
-        })
+        options = generate_text.call_args.kwargs
+        self.assertEqual(options['temperature'], 0.7)
+        self.assertEqual(options['max_tokens'], 2048)
+        self.assertEqual(options['output_schema'], GeneratedScene.model_json_schema())
+        self.assertTrue(callable(options['is_cancelled']))
         variant = SceneVariant.objects.select_related('run__request').get(pk=generated['id'])
         self.assertEqual(variant.run.status, 'completed')
         self.assertIsNotNone(variant.run.finished_at)

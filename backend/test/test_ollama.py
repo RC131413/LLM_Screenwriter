@@ -1,111 +1,155 @@
 import json
 from io import BytesIO
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Event, Thread
 from unittest.mock import patch
-from urllib.error import HTTPError, URLError
 
 from django.test import SimpleTestCase
 
-from backend.ollama import OLLAMA_MODEL, OllamaError, generate
+from backend.ollama import OLLAMA_GPU_LAYERS, OLLAMA_MODEL, OllamaCancelled, OllamaError, generate
+
+
+class Reply(BytesIO):
+    def __init__(self, body, status=200):
+        super().__init__(body)
+        self.status = status
+
+
+def complete(text='OK', **extra):
+    return Reply(json.dumps({'response': text, 'done': True, **extra}, ensure_ascii=False).encode('utf-8') + b'\n')
 
 
 class OllamaClientTests(SimpleTestCase):
-    @patch('backend.ollama.urlopen')
-    def test_sends_output_schema_to_ollama_for_enforced_json_generation(self, opener):
+    @patch('backend.ollama.HTTPConnection')
+    def test_posts_utf8_prompt_to_fixed_model_and_buffers_stream_on_gpu(self, transport):
+        transport.return_value.getresponse.return_value = Reply(
+            '{"response":"Połączenie ","done":false}\n{"response":"działa.","done":true}\n'.encode('utf-8'),
+        )
+        self.assertEqual(generate('Napisz krótką odpowiedź.'), 'Połączenie działa.')
+        transport.assert_called_once_with('127.0.0.1', 11434, timeout=120)
+        request = transport.return_value.request.call_args
+        self.assertEqual(request.args, ('POST', '/api/generate'))
+        payload = json.loads(request.kwargs['body'].decode('utf-8'))
+        self.assertEqual(payload['model'], OLLAMA_MODEL)
+        self.assertEqual(payload['prompt'], 'Napisz krótką odpowiedź.')
+        self.assertIs(payload['stream'], True)
+        self.assertEqual(payload['options'], {'num_predict': 128, 'temperature': 0.7, 'num_gpu': OLLAMA_GPU_LAYERS})
+        self.assertEqual(request.kwargs['headers']['Content-Type'], 'application/json')
+        transport.return_value.close.assert_called_once()
+
+    @patch('backend.ollama.HTTPConnection')
+    def test_accepts_custom_address_timeout_and_parameters(self, transport):
+        transport.return_value.getresponse.return_value = complete()
+        generate('Test', base_url='http://127.0.0.1:11435/', timeout=10, temperature=0.3, max_tokens=512)
+        transport.assert_called_once_with('127.0.0.1', 11435, timeout=10)
+        payload = json.loads(transport.return_value.request.call_args.kwargs['body'])
+        self.assertEqual(payload['options'], {'num_predict': 512, 'temperature': 0.3, 'num_gpu': 99})
+        self.assertEqual(payload['model'], OLLAMA_MODEL)
+
+    @patch('backend.ollama.HTTPConnection')
+    def test_sends_output_schema_to_ollama_for_enforced_json_generation(self, transport):
         schema = {'type': 'object', 'properties': {'blocks': {'type': 'array'}}}
         answer = '{"blocks":[{"type":"action","text":"Anna otwiera drzwi."}]}'
-        opener.return_value.__enter__.return_value.read.return_value = json.dumps({
-            'response': answer, 'done': True, 'done_reason': 'stop',
-        }).encode('utf-8')
+        transport.return_value.getresponse.return_value = complete(answer, done_reason='stop')
         self.assertEqual(generate('Test', output_schema=schema), answer)
-        self.assertEqual(json.loads(opener.call_args.args[0].data)['format'], schema)
+        self.assertEqual(json.loads(transport.return_value.request.call_args.kwargs['body'])['format'], schema)
 
-    @patch('backend.ollama.urlopen')
-    def test_token_limit_is_not_reported_as_a_complete_structured_scene(self, opener):
-        opener.return_value.__enter__.return_value.read.return_value = b'{"response":"{}","done":true,"done_reason":"length"}'
+    @patch('backend.ollama.HTTPConnection')
+    def test_token_limit_is_not_reported_as_complete_structured_scene(self, transport):
+        transport.return_value.getresponse.return_value = complete('{}', done_reason='length')
         with self.assertRaises(OllamaError) as caught:
             generate('Test', output_schema={'type': 'object'})
         self.assertIn('limit tokenów', str(caught.exception))
 
-    @patch('backend.ollama.urlopen')
-    def test_posts_utf8_prompt_to_fixed_model_and_returns_completed_text(self, opener):
-        opener.return_value.__enter__.return_value.read.return_value = json.dumps({
-            'response': 'Połączenie działa.', 'done': True,
-        }, ensure_ascii=False).encode('utf-8')
-        self.assertEqual(generate('Napisz krótką odpowiedź.'), 'Połączenie działa.')
-        request = opener.call_args.args[0]
-        self.assertEqual(request.full_url, 'http://127.0.0.1:11434/api/generate')
-        self.assertEqual(request.get_method(), 'POST')
-        self.assertEqual(request.get_header('Content-type'), 'application/json')
-        payload = json.loads(request.data.decode('utf-8'))
-        self.assertEqual(payload['model'], OLLAMA_MODEL)
-        self.assertEqual(payload['prompt'], 'Napisz krótką odpowiedź.')
-        self.assertIs(payload['stream'], False)
-        self.assertEqual(payload['options']['num_predict'], 128)
-        self.assertEqual(opener.call_args.kwargs['timeout'], 120)
-
-    @patch('backend.ollama.urlopen')
-    def test_accepts_custom_server_address_and_timeout_but_keeps_model_fixed(self, opener):
-        opener.return_value.__enter__.return_value.read.return_value = b'{"response":"OK","done":true}'
-        generate('Test', base_url='http://127.0.0.1:11435/', timeout=10, temperature=0.3, max_tokens=512)
-        self.assertEqual(opener.call_args.args[0].full_url, 'http://127.0.0.1:11435/api/generate')
-        self.assertEqual(opener.call_args.kwargs['timeout'], 10)
-        self.assertEqual(json.loads(opener.call_args.args[0].data)['model'], OLLAMA_MODEL)
-        self.assertEqual(json.loads(opener.call_args.args[0].data)['options'], {'num_predict': 512, 'temperature': 0.3})
-
-    @patch('backend.ollama.urlopen')
-    def test_rejects_empty_or_non_text_prompts_without_http_request(self, opener):
+    @patch('backend.ollama.HTTPConnection')
+    def test_rejects_invalid_prompts_without_http_request(self, transport):
         for prompt in ('', '   ', None, 123):
             with self.subTest(prompt=prompt), self.assertRaises(ValueError):
                 generate(prompt)
-        opener.assert_not_called()
+        transport.assert_not_called()
 
-    @patch('backend.ollama.urlopen', side_effect=URLError(ConnectionRefusedError('refused')))
-    def test_unreachable_ollama_is_service_unavailable(self, opener):
-        with self.assertRaises(OllamaError) as caught:
-            generate('Test')
-        self.assertEqual(caught.exception.status_code, 503)
-        self.assertIn('Uruchom Ollamę', str(caught.exception))
-
-    @patch('backend.ollama.urlopen')
-    def test_direct_and_wrapped_timeouts_are_gateway_timeouts(self, opener):
-        for failure in (TimeoutError('timed out'), URLError(TimeoutError('timed out'))):
-            with self.subTest(error=type(failure).__name__):
-                opener.side_effect = failure
+    @patch('backend.ollama.HTTPConnection')
+    def test_connection_failure_and_timeout_are_translated(self, transport):
+        for failure, status in ((ConnectionRefusedError('refused'), 503), (TimeoutError('timeout'), 504)):
+            with self.subTest(status=status):
+                transport.return_value.request.side_effect = failure
                 with self.assertRaises(OllamaError) as caught:
                     generate('Test')
-                self.assertEqual(caught.exception.status_code, 504)
+                self.assertEqual(caught.exception.status_code, status)
 
-    @patch('backend.ollama.urlopen')
-    def test_missing_model_explains_installation_without_retry_or_substitution(self, opener):
-        opener.side_effect = HTTPError('http://127.0.0.1:11434/api/generate', 404, 'Not found', {}, BytesIO(b'{}'))
-        with self.assertRaises(OllamaError) as caught:
-            generate('Test')
-        self.assertEqual(caught.exception.status_code, 502)
-        self.assertIn(f'ollama pull {OLLAMA_MODEL}', str(caught.exception))
-        opener.assert_called_once()
-
-    @patch('backend.ollama.urlopen')
-    def test_upstream_http_error_is_translated(self, opener):
-        opener.side_effect = HTTPError('http://127.0.0.1:11434/api/generate', 500, 'Error', {}, BytesIO(b'{}'))
-        with self.assertRaises(OllamaError) as caught:
-            generate('Test')
-        self.assertEqual(caught.exception.status_code, 502)
-        self.assertIn('HTTP 500', str(caught.exception))
-
-    @patch('backend.ollama.urlopen')
-    def test_invalid_incomplete_or_empty_responses_are_not_reported_as_success(self, opener):
-        for body in (b'not json', b'\xff', b'[]', b'{"done":false,"response":"Partial"}',
-                     b'{"done":true}', b'{"done":true,"response":" "}', b'{"done":true,"response":123}'):
-            with self.subTest(body=body):
-                opener.return_value.__enter__.return_value.read.return_value = body
+    @patch('backend.ollama.HTTPConnection')
+    def test_http_errors_explain_missing_model_without_retry_or_substitution(self, transport):
+        for status in (404, 500):
+            with self.subTest(status=status):
+                transport.return_value.getresponse.return_value = Reply(b'{}', status)
                 with self.assertRaises(OllamaError) as caught:
                     generate('Test')
                 self.assertEqual(caught.exception.status_code, 502)
+                self.assertIn(f'ollama pull {OLLAMA_MODEL}' if status == 404 else 'HTTP 500', str(caught.exception))
+        self.assertEqual(transport.return_value.request.call_count, 2)
+
+    @patch('backend.ollama.HTTPConnection')
+    def test_invalid_incomplete_empty_and_error_streams_are_rejected(self, transport):
+        for body in (b'not json\n', b'\xff\n', b'[]\n', b'{"response":"Partial","done":false}\n',
+                     b'{"done":true}\n', b'{"done":true,"response":" "}\n',
+                     b'{"done":true,"response":123}\n', b'{"error":"runner failed"}\n'):
+            with self.subTest(body=body):
+                transport.return_value.getresponse.return_value = Reply(body)
+                with self.assertRaises(OllamaError) as caught:
+                    generate('Test')
+                self.assertEqual(caught.exception.status_code, 502)
+
+    def test_cancellation_closes_real_socket_before_headers_and_after_partial_tokens(self):
+        for send_partial in (False, True):
+            with self.subTest(send_partial=send_partial):
+                ready, cancel, disconnected = Event(), Event(), Event()
+                outcomes = []
+
+                class Handler(BaseHTTPRequestHandler):
+                    def do_POST(self):
+                        self.rfile.read(int(self.headers['Content-Length']))
+                        if send_partial:
+                            self.send_response(200)
+                            self.end_headers()
+                            self.wfile.write(b'{"response":"Partial","done":false}\n')
+                            self.wfile.flush()
+                        ready.set()
+                        self.connection.settimeout(3)
+                        if self.connection.recv(1) == b'':
+                            disconnected.set()
+
+                    def log_message(self, *args):
+                        pass
+
+                server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                serving = Thread(target=server.serve_forever, daemon=True)
+                serving.start()
+
+                def call_model():
+                    try:
+                        outcomes.append(generate('Test', base_url=f'http://127.0.0.1:{server.server_port}',
+                                                 is_cancelled=cancel.is_set, timeout=3))
+                    except Exception as error:
+                        outcomes.append(error)
+
+                worker = Thread(target=call_model, daemon=True)
+                worker.start()
+                try:
+                    self.assertTrue(ready.wait(2))
+                    cancel.set()
+                    worker.join(timeout=2)
+                    self.assertFalse(worker.is_alive())
+                    self.assertEqual(len(outcomes), 1)
+                    self.assertIsInstance(outcomes[0], OllamaCancelled)
+                    self.assertTrue(disconnected.wait(2))
+                finally:
+                    cancel.set()
+                    server.shutdown()
+                    server.server_close()
 
 
 class RemovedLlmPingTests(SimpleTestCase):
     @patch('backend.ollama.generate')
     def test_temporary_probe_is_removed(self, generate_text):
-        response = self.client.get('/api/llm/ping')
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.client.get('/api/llm/ping').status_code, 404)
         generate_text.assert_not_called()

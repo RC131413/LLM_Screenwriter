@@ -38,7 +38,7 @@ describe('application → hooks → API client → HTTP', () => {
     expect(sourceText).toBe('Najnowszy tekst sceny.');
     const writes = http.calls.filter(call => call.path === '/scenes/20' || call.path === '/scenes/20/generate');
     expect(writes.map(call => [call.method, call.path])).toEqual([['PATCH', '/scenes/20'], ['POST', '/scenes/20/generate']]);
-    expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog' });
+    expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog', generation_id: expect.any(String) });
     expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
     await user.click(screen.getByRole('button', { name: 'Zastosuj wybrany wariant' }));
     expect(await screen.findByLabelText('Postać 1')).toHaveValue('ANNA');

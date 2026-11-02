@@ -38,6 +38,8 @@ h1, h2, h3, p { margin: 0; }
 .button.primary { background: #303c37; color: #fff; border-color: #303c37; }
 .button.primary:hover:not(:disabled) { background: #405149; }
 .button.danger { color: #a33e3e; border-color: #dfbaba; }
+.button.cancel-generation { margin-top: 8px; background: #9c3f3f; border-color: #9c3f3f; color: #fff; }
+.button.cancel-generation:hover:not(:disabled) { background: #853434; border-color: #853434; }
 .full-width { width: 100%; }
 .app-body { display: flex; flex: 1; min-height: 0; position: relative; }
 .scene-sidebar { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: #f9fafb; }

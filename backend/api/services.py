@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
 from django.db.models import JSONField
+from django.db import connections
 from django.shortcuts import get_object_or_404
 
 from .models import (
@@ -60,6 +61,14 @@ def scene_generation_prompt(prompt):
 
 def owned(model, user):
     return model.objects.filter(**{OWNER_PATHS[model]: user})
+
+
+def generation_is_cancelled(run_id):
+    """Called by the cancellation watcher; release its thread-local DB connection."""
+    try:
+        return not GenerationRun.objects.filter(pk=run_id, status='running').exists()
+    finally:
+        connections['default'].close()
 
 
 def get_owned(model, user, pk):

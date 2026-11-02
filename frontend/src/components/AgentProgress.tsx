@@ -8,7 +8,7 @@ export function AgentProgress({ run }: { run: ApiRunDetail | null }) {
   const running = ['pending', 'running'].includes(run.status);
   const percent = agents.length ? Math.round(completed / agents.length * 100) : run.status === 'completed' ? 100 : 0;
   return <section className="panel-section"><span className="eyebrow">PRZEBIEG #{run.id}</span>
-    <div className="progress-heading"><span role="status">{run.status === 'completed' ? 'Zakończony' : run.status === 'failed' ? 'Błąd generowania' : running ? 'W trakcie' : run.status}</span><span>{percent}%</span></div>
+    <div className="progress-heading"><span role="status">{run.status === 'completed' ? 'Zakończony' : run.status === 'cancelled' ? 'Anulowano' : run.status === 'failed' ? 'Błąd generowania' : running ? 'W trakcie' : run.status}</span><span>{percent}%</span></div>
     <progress className="generation-progress" aria-label="Postęp generowania" max={100} value={running && !agents.length ? undefined : percent} />
     {run.error_message && <p className="form-error" role="alert">{run.error_message}</p>}
     {agents.length > 0 && <details className="agent-details"><summary><span>Szczegóły agentów</span><ChevronDown size={14} /></summary><ol className="agent-list">

@@ -104,8 +104,8 @@ class WorkspaceFlowTests(TestCase):
         self.request('patch', f'/acts/{act["id"]}', {'summary': 'Changed afterwards.'})
         self.login_again()
         history = self.request('get', f'/scenes/{scene["id"]}/prompts')
-        self.assertEqual(history['count'], 1)
-        stored = history['items'][0]
+        self.assertEqual(history['count'], 0)
+        stored = self.request('get', f'/prompts/{prompt["id"]}')
         self.assertEqual(stored['id'], prompt['id'])
         self.assertEqual(stored['context_snapshot']['characters'][0]['backstory'], 'A former teacher.')
         self.assertEqual(stored['context_snapshot']['act']['summary'], 'The train leaves.')
@@ -146,7 +146,7 @@ class WorkspaceFlowTests(TestCase):
         self.assertEqual(stored['sort_order'], 4)
         self.assertEqual(stored['content_text'], 'The letter falls.')
         self.assertEqual(stored['cast_members'], [])
-        self.assertEqual(self.request('get', f'/scenes/{scene["id"]}/prompts')['items'][0]['id'], prompt['id'])
+        self.assertEqual(self.request('get', f'/prompts/{prompt["id"]}')['id'], prompt['id'])
 
     def test_failed_edit_does_not_replace_persisted_editor_data(self):
         _, _, scene, _ = self.create_workspace()

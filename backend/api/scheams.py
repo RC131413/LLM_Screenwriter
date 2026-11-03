@@ -3,6 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from ninja import Schema
 from pydantic import ConfigDict, EmailStr, Field
@@ -15,6 +16,52 @@ ModelName = Literal['Bielik 11B (Lokalny)']
 
 class InputSchema(Schema):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+
+
+class GeneratedBlock(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    type: Literal['action', 'character', 'dialogue', 'parenthetical', 'transition']
+    text: str = Field(min_length=1)
+
+
+class GeneratedAction(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    type: Literal['action']
+    text: str = Field(min_length=1, description='Widoczna akcja i opis otoczenia w trzeciej osobie. Bez dialogów ani etykiet miejsca i pory dnia.')
+
+
+class GeneratedSpeech(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    type: Literal['speech']
+    speaker: str = Field(min_length=1, max_length=150, description='Wyłącznie nazwa postaci wypowiadającej słowa.')
+    parenthetical: str | None = Field(max_length=120, description='Krótka, konkretna wskazówka aktorska (zwykle 1–4 słowa), gdy pomaga zagrać kwestię: intencja, pauza lub zmiana sposobu mówienia. Null, gdy zbędna. Bez mechanicznych powtórzeń i opisów czynności.')
+    spoken_text: str = Field(min_length=1, description='Wyłącznie słowa wypowiedziane na głos przez postać. Opis światła, otoczenia, ruchów i narracja należą do action.')
+
+
+class GeneratedScene(InputSchema):
+    blocks: list[Annotated[GeneratedAction | GeneratedSpeech, Field(discriminator='type')]] = Field(min_length=1)
+
+
+class GeneratedHeading(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    location_heading: str = Field(min_length=1, max_length=255)
+    time_of_day: str = Field(min_length=1, max_length=50)
+
+
+class ModelHeading(InputSchema):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    location_type: Literal['WN.', 'PL.'] = Field(description='WN. dla wnętrza budynku, PL. dla pleneru.')
+    location_heading: str = Field(min_length=1, max_length=240, description='Sama nazwa miejsca, np. CHATA. Bez prefiksu, etykiety Miejsce i bez pory dnia.')
+    time_of_day: Literal['DZIEŃ', 'NOC', 'RANO', 'ŚWIT', 'WIECZÓR', 'POŁUDNIE', 'PRZEDPOŁUDNIE', 'POPOŁUDNIE', 'ZMIERZCH', 'ZMROK', 'KONTYNUACJA']
+
+
+class GeneratedSceneWithHeading(InputSchema):
+    heading: ModelHeading
+    blocks: list[Annotated[GeneratedAction | GeneratedSpeech, Field(discriminator='type')]] = Field(min_length=1)
+
+
+class EditorBlock(GeneratedBlock):
+    id: str = Field(min_length=1)
 
 
 class MessageOut(Schema):
@@ -221,6 +268,22 @@ class PromptIn(InputSchema):
     generation_parameters: GenerationParametersIn | None = None
 
 
+class GenerateSceneIn(PromptIn):
+    generation_id: UUID | None = None
+    variant_count: Annotated[int, Field(strict=True, ge=1, le=3)] | None = None
+
+
+class CancelGenerationIn(PromptIn):
+    generation_id: UUID
+
+
+class ActiveGenerationOut(Schema):
+    scene_id: int
+    generation_id: UUID
+    user_prompt: str
+    variant_count: Literal[1, 2, 3]
+
+
 class PromptOut(Schema):
     id: int
     scene_id: int
@@ -271,6 +334,10 @@ class VariantOut(Schema):
     critic_metadata: dict[str, Any]
     is_selected: bool
     created_at: datetime
+
+
+class SelectedVariantOut(VariantOut):
+    applied_scene: SceneOut | None = None
 
 
 class SelectVariantIn(InputSchema):

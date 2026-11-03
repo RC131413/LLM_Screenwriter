@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { allPages, errorMessage } from '../services/workspaceData';
 import type { PromptHistoryEntry } from '../types';
@@ -8,6 +8,7 @@ export function usePromptHistory(projectId: string, sceneId: string | undefined)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);
+  const retry = useCallback(() => setVersion(value => value + 1), []);
   useEffect(() => {
     setEntries([]); setError(''); setLoading(!!sceneId);
     if (!sceneId) return;
@@ -20,7 +21,7 @@ export function usePromptHistory(projectId: string, sceneId: string | undefined)
     return () => controller.abort();
   }, [projectId, sceneId, version]);
   return {
-    entries, loading, error, retry: () => setVersion(value => value + 1),
+    entries, loading, error, retry,
     recordPrompt: async (prompt: string) => {
       if (!sceneId) throw new Error('Wybierz scenę.');
       await api.prompts.create(Number(sceneId), { user_prompt: prompt });

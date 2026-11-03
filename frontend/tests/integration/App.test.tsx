@@ -7,7 +7,58 @@ import { deferred, jsonResponse } from '../support/http';
 import { workspaceHttp } from '../support/workspaceHttp';
 
 describe('application → hooks → API client → HTTP', () => {
-  it('flushes the latest editor content before sending the prompt and displays the model result', async () => {
+  it('restores a running generation after visiting statistics and reloading the editor', async () => {
+    const response = deferred<Response>();
+    let active: { scene_id: number; user_prompt: string; generation_id: string; variant_count: number } | null = null;
+    const http = workspaceHttp((call, workspace) => {
+      if (call.path === '/users/me') return jsonResponse(userFixture());
+      if (call.path === '/users/me/preferences') return jsonResponse(preferencesFixture());
+      if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
+      if (call.path === '/generation/active') return jsonResponse(active);
+      if (call.path === '/scenes/20/generate') {
+        active = { ...(call.body as NonNullable<typeof active>), scene_id: 20 };
+        return response.promise;
+      }
+      if (call.path === '/scenes/20/cancel-generation') {
+        active = null;
+        return jsonResponse({ detail: 'Generowanie anulowane.' });
+      }
+      if (['/scenes/20/prompts', '/scenes/20/runs', '/scenes/20/variants'].includes(call.path)) {
+        return jsonResponse({ items: [], count: 0 });
+      }
+      return undefined;
+    });
+    const mounted = render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('link', { name: 'Otwórz projekt Nocny pociąg' }));
+    await user.type(await screen.findByLabelText('Kierunek sceny'), 'Pisz dalej');
+    await user.click(screen.getByRole('button', { name: '2' }));
+    await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
+    await waitFor(() => expect(active).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: /Menu użytkownika/ }));
+    await user.click(screen.getByRole('menuitem', { name: 'Ustawienia' }));
+    await user.click(await screen.findByRole('tab', { name: 'Statystyki' }));
+    await user.click(screen.getByRole('link', { name: 'Wróć do edytora' }));
+    expect(await screen.findByLabelText('Kierunek sceny')).toHaveValue('Pisz dalej');
+    expect(screen.getByRole('button', { name: 'Anuluj generowanie' })).toBeEnabled();
+    const original = http.calls.find(call => call.path === '/scenes/20/generate')!;
+    expect(original.init.signal?.aborted).toBe(false);
+
+    mounted.unmount();
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Anuluj generowanie' })).toBeEnabled());
+    expect(screen.getByLabelText('Kierunek sceny')).toHaveValue('Pisz dalej');
+    expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
+    expect(await screen.findByText('Generowanie anulowane.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generuj scenę' })).toBeEnabled();
+    expect(http.calls.find(call => call.path === '/scenes/20/cancel-generation')?.body)
+      .toEqual({ user_prompt: 'Pisz dalej', generation_id: (original.body as { generation_id: string }).generation_id });
+    expect(http.calls.filter(call => call.path === '/scenes/20/generate')).toHaveLength(1);
+    await act(async () => { response.resolve(jsonResponse({ detail: 'Generowanie anulowane.' }, 409)); });
+  });
+
+  it('flushes editor changes, previews structured generation and applies it to the correct editor blocks', async () => {
     let generated = false;
     let sourceText = '';
     const http = workspaceHttp((call, workspace) => {
@@ -16,7 +67,18 @@ describe('application → hooks → API client → HTTP', () => {
       if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
       if (call.path === '/scenes/20/generate') {
         sourceText = workspace.scenes[0].content_text; generated = true;
-        return jsonResponse(variantFixture(), 201);
+        return jsonResponse([variantFixture()], 201);
+      }
+      if (call.path === '/variants/70/select') {
+        const variant = variantFixture();
+        workspace.scenes[0].content_text += '\n\n' + variant.generated_full_text;
+        const currentBlocks = workspace.scenes[0].editor_metadata.blocks;
+        const continuation = variant.critic_metadata.blocks;
+        workspace.scenes[0].editor_metadata = {
+          ...workspace.scenes[0].editor_metadata,
+          blocks: [...(Array.isArray(currentBlocks) ? currentBlocks : []), ...(Array.isArray(continuation) ? continuation : [])],
+        };
+        return jsonResponse({ ...variant, is_selected: true, applied_scene: workspace.scenes[0] });
       }
       if (call.path === '/scenes/20/variants') return jsonResponse({ items: generated ? [variantFixture()] : [], count: generated ? 1 : 0 });
       if (['/scenes/20/prompts', '/scenes/20/runs'].includes(call.path)) return jsonResponse({ items: [], count: 0 });
@@ -28,12 +90,20 @@ describe('application → hooks → API client → HTTP', () => {
     fireEvent.change(await screen.findByLabelText('Akcja 1'), { target: { value: 'Najnowszy tekst sceny.' } });
     await user.type(screen.getByLabelText('Kierunek sceny'), 'Dodaj dialog');
     await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
-    expect(await screen.findByRole('region', { name: 'Wynik generowania' })).toHaveTextContent('Znalazłam list.');
+    expect(await screen.findByRole('radio', { name: 'Wariant Bielika' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Podgląd tekstu' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Znalazłam list.');
+    await user.click(screen.getByRole('button', { name: 'Zamknij' }));
     expect(sourceText).toBe('Najnowszy tekst sceny.');
     const writes = http.calls.filter(call => call.path === '/scenes/20' || call.path === '/scenes/20/generate');
     expect(writes.map(call => [call.method, call.path])).toEqual([['PATCH', '/scenes/20'], ['POST', '/scenes/20/generate']]);
-    expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog' });
+    expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog', generation_id: expect.any(String), variant_count: 1 });
     expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
+    await user.click(screen.getByRole('button', { name: 'Zastosuj wybrany wariant' }));
+    expect(await screen.findByLabelText('Postać 2')).toHaveValue('ANNA');
+    expect(screen.getByLabelText('Dialog 3')).toHaveValue('Znalazłam list.');
+    expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
+    expect(http.workspace.scenes[0].content_text).toBe('Najnowszy tekst sceny.\n\n' + variantFixture().generated_full_text);
   });
 
   it('saves location and time separately from the visible heading field and restores them after remount', async () => {

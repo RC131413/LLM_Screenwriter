@@ -6,6 +6,51 @@ from ._api_base import ApiTestCase
 
 
 class GenerationTests(ApiTestCase):
+    def test_applying_structured_variant_preserves_block_types_ids_and_scene_context(self):
+        blocks = [
+            {'id': 'generated-action', 'type': 'action', 'text': 'Anna czyta list.'},
+            {'id': 'generated-name', 'type': 'character', 'text': 'ANNA'},
+            {'id': 'generated-direction', 'type': 'parenthetical', 'text': '(szeptem)'},
+            {'id': 'generated-dialogue', 'type': 'dialogue', 'text': 'To niemożliwe.'},
+            {'id': 'generated-transition', 'type': 'transition', 'text': 'CIĘCIE DO:'},
+        ]
+        self.variant.critic_metadata = {'format': 'screenplay_blocks_v1', 'blocks': blocks}
+        self.variant.generated_full_text = '\n\n'.join(block['text'] for block in blocks)
+        self.variant.save()
+        self.scene.editor_metadata = {'zoom': 120, 'status': 'review', 'blocks': [{'id': 'old', 'type': 'action', 'text': 'Old'}]}
+        self.scene.ai_metadata = {'notes': 'Preserve notes'}
+        self.scene.location_heading = 'WN. DOM'
+        self.scene.time_of_day = 'NOC'
+        self.scene.save()
+        self.assert_status(self.send('post', f'/variants/{self.variant.pk}/select', {'apply_to_scene': False}), 200)
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.editor_metadata['blocks'][0]['id'], 'old')
+        self.assert_status(self.send('post', f'/variants/{self.variant.pk}/select', {'apply_to_scene': True}), 200)
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.editor_metadata['blocks'], [{'id': 'old', 'type': 'action', 'text': 'Old'}, *blocks])
+        self.assertEqual(self.scene.editor_metadata['zoom'], 120)
+        self.assertEqual(self.scene.editor_metadata['status'], 'review')
+        self.assertEqual(self.scene.ai_metadata, {'notes': 'Preserve notes'})
+        self.assertEqual(self.scene.location_heading, 'WN. DOM')
+        self.assertEqual(self.scene.time_of_day, 'NOC')
+        self.assertEqual(self.scene.content_text, 'Old\n\n' + self.variant.generated_full_text)
+        workspace = self.send('get', f'/projects/{self.project.pk}/workspace').json()
+        saved = next(scene for scene in workspace['scenes'] if scene['id'] == self.scene.pk)
+        self.assertEqual(saved['editor_metadata']['blocks'], self.scene.editor_metadata['blocks'])
+
+    def test_invalid_variant_blocks_do_not_erase_scene_or_change_selection(self):
+        self.variant.critic_metadata = {'blocks': [{'id': 'bad', 'type': 'unknown', 'text': 'Text'}]}
+        self.variant.save()
+        self.scene.content_text = 'Original text'
+        self.scene.editor_metadata = {'zoom': 120}
+        self.scene.save()
+        self.assert_status(self.send('post', f'/variants/{self.variant.pk}/select', {'apply_to_scene': True}), 422)
+        self.scene.refresh_from_db()
+        self.variant.refresh_from_db()
+        self.assertEqual(self.scene.content_text, 'Original text')
+        self.assertEqual(self.scene.editor_metadata, {'zoom': 120})
+        self.assertFalse(self.variant.is_selected)
+
 
     def test_prompt_uses_saved_engine_preferences(self):
         self.assert_status(self.send('put', '/users/me/preferences', {
@@ -33,7 +78,11 @@ class GenerationTests(ApiTestCase):
         self.assertEqual(prompt.generation_parameters['temperature'], 0.7)
         self.assertEqual(prompt.model_name, 'Bielik 11B')
         self.assertFalse(GenerationRun.objects.filter(request=prompt).exists())
-        self.assertEqual(self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['items'][0]['id'], prompt.pk)
+        for status in ('running', 'failed', 'cancelled'):
+            request = SceneGenerationRequest.objects.create(scene=self.scene, user_prompt=status)
+            GenerationRun.objects.create(request=request, status=status)
+        self.assertEqual([item['id'] for item in self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['items']],
+                         [self.prompt.pk])
         self.assertEqual(self.send('get', f'/scenes/{self.next_scene.pk}/prompts').json()['count'], 0)
         self.assert_status(self.send('get', f'/prompts/{prompt.pk}'), 200)
         self.assert_status(self.send('get', f'/prompts/{prompt.pk}/run'), 404)
@@ -85,9 +134,32 @@ class GenerationTests(ApiTestCase):
         self.assert_status(self.send('post', f'/variants/{self.next_variant.pk}/select', {'apply_to_scene': True}), 200)
         self.scene.refresh_from_db()
         self.assertEqual(self.scene.content_text, self.next_variant.generated_full_text)
-        self.assertNotIn('blocks', self.scene.editor_metadata)
+        self.assertEqual(self.scene.editor_metadata['blocks'][0]['text'], self.next_variant.generated_full_text)
         self.assertEqual(self.scene.editor_metadata['zoom'], 120)
         self.assertEqual(SceneVariant.objects.filter(scene=self.scene, is_selected=True).count(), 1)
+
+    def test_switching_variants_replaces_only_the_active_blocks_and_reapplication_is_a_noop(self):
+        self.scene.content_text = 'Tekst autora.'
+        self.scene.save()
+        def apply(variant):
+            return self.assert_status(self.send('post', f'/variants/{variant.pk}/select', {
+                'apply_to_scene': True,
+            }), 200).json()['applied_scene']
+
+        first = apply(self.variant)
+        self.assertIsNone(apply(self.variant))
+        manual = {'id': 'author-end', 'type': 'action', 'text': 'Dopisek autora.'}
+        metadata = first['editor_metadata']
+        metadata['blocks'].append(manual)
+        self.assert_status(self.send('patch', f'/scenes/{self.scene.pk}', {
+            'editor_metadata': metadata, 'content_text': first['content_text'] + '\n\n' + manual['text'],
+        }), 200)
+        second = apply(self.next_variant)
+        self.assertEqual(second['content_text'], f'Tekst autora.\n\n{self.next_variant.generated_full_text}\n\nDopisek autora.')
+        self.assertEqual(second['editor_metadata']['blocks'][-1], manual)
+        self.assertIsNone(apply(self.next_variant))
+        self.assertEqual(apply(self.variant)['content_text'],
+                         f'Tekst autora.\n\n{self.variant.generated_full_text}\n\nDopisek autora.')
 
     def test_statistics_are_scoped_to_the_current_user(self):
         stats = self.assert_status(self.send('get', '/users/me/statistics'), 200).json()

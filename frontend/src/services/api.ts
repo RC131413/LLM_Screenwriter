@@ -168,6 +168,12 @@ export interface ApiWorkspace { project: ApiProject; acts: ApiAct[]; characters:
 
 export interface GenerationParametersInput { temperature?: number; max_tokens?: number }
 export interface CreatePromptInput { user_prompt: string; generation_parameters?: GenerationParametersInput | null }
+export interface GenerateSceneInput extends CreatePromptInput { generation_id?: string; variant_count: 1 | 2 | 3 }
+export interface CancelGenerationInput extends CreatePromptInput { generation_id: string }
+export interface ApiActiveGeneration extends CancelGenerationInput {
+  scene_id: ApiId;
+  variant_count: 1 | 2 | 3;
+}
 export interface ApiPrompt {
   id: ApiId;
   scene_id: ApiId;
@@ -443,8 +449,10 @@ export const charactersApi = {
 };
 
 export const scenesApi = {
-  generate: (sceneId: ApiId, data: CreatePromptInput, options: CallOptions = {}) =>
-    apiRequest<ApiSceneVariant>(`scenes/${id(sceneId)}/generate`, { ...options, method: 'POST', body: data }),
+  generate: (sceneId: ApiId, data: GenerateSceneInput, options: CallOptions = {}) =>
+    apiRequest<ApiSceneVariant[]>(`scenes/${id(sceneId)}/generate`, { ...options, method: 'POST', body: data }),
+  cancelGeneration: (sceneId: ApiId, data: CancelGenerationInput, options: CallOptions = {}) =>
+    apiRequest<MessageResponse>(`scenes/${id(sceneId)}/cancel-generation`, { ...options, method: 'POST', body: data }),
   list: (projectId: ApiId, params: SceneListParams = {}, options: CallOptions = {}) =>
     apiRequest<Page<ApiScene>>(`projects/${id(projectId)}/scenes`, { ...options, query: { ...params } }),
   create: (projectId: ApiId, data: CreateSceneInput, options: CallOptions = {}) =>
@@ -478,6 +486,8 @@ export const promptsApi = {
 };
 
 export const runsApi = {
+  active: (options: CallOptions = {}) =>
+    apiRequest<ApiActiveGeneration | null>('generation/active', options),
   list: (sceneId: ApiId, params: PaginationParams = {}, options: CallOptions = {}) =>
     apiRequest<Page<ApiGenerationRun>>(`scenes/${id(sceneId)}/runs`, { ...options, query: { ...params } }),
   get: (runId: ApiId, options: CallOptions = {}) => apiRequest<ApiRunDetail>(`runs/${id(runId)}`, options),
@@ -498,7 +508,7 @@ export const variantsApi = {
     apiRequest<Page<ApiSceneVariant>>(`runs/${id(runId)}/variants`, { ...options, query: { ...params } }),
   get: (variantId: ApiId, options: CallOptions = {}) => apiRequest<ApiSceneVariant>(`variants/${id(variantId)}`, options),
   select: (variantId: ApiId, data: SelectVariantInput = {}, options: CallOptions = {}) =>
-    apiRequest<ApiSceneVariant>(`variants/${id(variantId)}/select`, { ...options, method: 'POST', body: data }),
+    apiRequest<ApiSceneVariant & { applied_scene: ApiScene | null }>(`variants/${id(variantId)}/select`, { ...options, method: 'POST', body: data }),
 };
 
 export const api = {

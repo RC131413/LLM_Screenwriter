@@ -131,12 +131,21 @@ running it again: `docker compose up -d --build db_setup`.
 
 `backend/ollama.py` exposes `generate(prompt: str) -> str`. It sends UTF-8 JSON to
 `http://127.0.0.1:11434/api/generate` using Python's standard library, with
-`stream: false` and a 120-second timeout. Optional `temperature` and `max_tokens`
+an internally buffered NDJSON stream and a 120-second socket timeout. Partial
+tokens are never sent to the frontend. Optional `temperature` and `max_tokens`
 keyword arguments control generation. The scene endpoint uses saved AI preferences
 (by default temperature 0.7 and 2048 output tokens), unless the request overrides them.
 The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
 Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
 The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
+Requests explicitly set `num_gpu: 99` to offload all layers of the fixed Bielik
+model to the GPU and `num_batch: 128` to limit prompt-processing buffers on the
+8 GB development GPU. On the development RTX 3060 Ti (8 GB), `ollama ps` verified
+`100% GPU` with the original 4096-token context, compared to automatic 83% GPU /
+17% CPU loading. GPU fit depends on free VRAM; `ollama ps` reports model placement,
+as described in [Ollama's FAQ](https://docs.ollama.com/faq#how-can-i-tell-if-my-model-was-loaded-onto-the-gpu).
+Scene generation supplies a JSON schema through Ollama's `format` field, following
+its [structured-output API](https://docs.ollama.com/capabilities/structured-outputs).
 
 With Ollama installed and running, download the model once:
 
@@ -153,12 +162,12 @@ POST /api/scenes/{scene_id}/generate
 Content-Type: application/json
 X-CSRFToken: <current CSRF token>
 
-{"user_prompt": "Dodaj krótki dialog o odnalezionym liście."}
+{"user_prompt": "Dodaj krótki dialog o odnalezionym liście.", "generation_id": "00000000-0000-4000-8000-000000000001"}
 ```
 
 The server verifies scene ownership and reads its current text and heading from
 PostgreSQL. It freezes a context snapshot, combines the scene with `user_prompt`
-and sends one direct request to Ollama. The browser cannot override the model or
+and sends a direct request to Ollama. The browser cannot override the model or
 provide a replacement scene context. Optional `generation_parameters` accepts
 `temperature` and `max_tokens`. No database lock is held while waiting for Ollama.
 
@@ -169,9 +178,106 @@ text in `generated_full_text`. Prompt history, a real `GenerationRun` and its
 used and no `AgentExecution` rows are created. The original scene is preserved
 until the user clicks "Zastosuj wybrany wariant".
 
-The assistant shows "Generowanie...", then the actual generated text. It refreshes
+The red "Anuluj generowanie" button below "Generuj scenę" sends an authenticated,
+CSRF-protected `POST /api/scenes/{scene_id}/cancel-generation` with the same
+`generation_id` UUID and `user_prompt`. The generation ID is optional for direct
+generation clients, but the frontend always creates one to support cancellation.
+The cancellation endpoint marks that specific run `cancelled`; an Ollama watcher
+checks the shared database and shuts down the upstream socket, including during
+initial model loading/prefill. The client discards buffered tokens. Generation
+and cancellation serialize their final writes using the project lock, so a
+cancel racing the final token also discards that run's result. Other runs and
+their variants are preserved. Cancellation arriving before generation creates a
+cancelled request marker, preventing a delayed generation request from starting.
+No new database column or migration is required; the UUID uses `run_metadata`.
+
+The UI waits for cancellation acknowledgement before reporting success. It ignores
+racing late responses, retains the prompt, and offers cancellation retry on a
+network failure. Cancelled runs do not display a variant, including after reload.
+Cancelling while the editor save is pending prevents the LLM request entirely.
+
+Each variant contains one continuation as an ordered `blocks` array.
+The model's enforced schema accepts `action` and `speech` within one scene.
+A `speech` groups `speaker`, nullable `parenthetical` and `spoken_text`; the backend
+expands it to the existing editor blocks in this order: `character`, optional
+`parenthetical`, `dialogue`. This prevents detached or trailing acting directions.
+The prompt encourages short, useful acting directions mixed with ordinary speech;
+`parenthetical: null` means no direction is needed for that line. New AI directions are refined
+before saving: redundant self-addressing is removed while preserving vocal intent
+(e.g. `szeptem do siebie` becomes `szeptem`), and an unchanged direction for the same
+speaker is not repeated. A different direction or speaker is retained. Existing
+scene blocks are consulted for continuation consistency and remain untouched.
+The `ignore` writing preference removes all new parenthetical blocks even if the
+model includes them. Preview text, saved blocks and the applied variant use the
+same refined result; this does not add an extra model call.
+The prompt distinguishes observable action/environment from words spoken aloud,
+with explicit examples, and asks for emotions to be shown through actions or speech.
+Meaning still depends on the model; schema validation guarantees the structural
+ordering, not perfect semantic classification of every sentence.
+The backend normalizes capitalization/brackets and assigns unique block IDs.
+The prompt requests only new text; an exact repeated
+suffix of the existing scene is removed from the start of the response. A response
+containing only repeated text is rejected without creating a variant.
+Only an empty scene without a heading or time of day requests an additional
+`heading` object in the enforced JSON schema. The model must choose `location_type`
+from `WN.` / `PL.`, supply a place name and a standard Polish `time_of_day`.
+The backend constructs the prefixed `location_heading`; the UI displays e.g.
+`WN. CHATA - ŚWIT`. The persisted heading still uses the existing two database
+fields. Redundant leading heading-only action paragraphs (`Miejsce:`, `Pora dnia:`)
+are removed. The proposed heading appears above the variant preview, separate
+from the blocks. Existing saved scenes and variants are not rewritten.
+Invalid or token-truncated output marks the run as failed without saving a variant.
+Dialogue is optional for every scene request. Action-only output is valid without
+special keywords. The panel sends `variant_count` (1–3), and the backend calls
+Ollama sequentially with the same author prompt, scene snapshot and generation
+settings. The first variant balances action and dialogue, the second emphasizes
+relationships and subtext, and the third emphasizes observable action. Every
+variant can include dialogue and sparse acting directions. An action block over
+600 characters or an explicit boundary inside the scene triggers one formatting
+retry for that variant before the batch can be saved.
+It saves the complete batch in one transaction and returns an array of variants.
+Requests without `variant_count` still return a single variant object.
+Cancellation or a generation failure discards the unfinished batch.
+The prompt asks for short, observable actions, natural dialogue only when useful,
+and sparing acting directions. New paragraphs should advance the scene goal with
+information, obstacles, discoveries or decisions rather than repeated questions,
+repeated gestures or abstract descriptions of feelings. It also asks the model to
+preserve established facts, exact character names, and the heading's place/time.
+Movement between interior and exterior should end the fragment before the new
+setting; it belongs in another scene. These are writing instructions, not semantic
+guarantees. Unless the author specifies a length, a short fragment is requested.
+Each generated fragment ends before the next scene. In the editor, a transition
+can be placed before the next scene's heading when the cut needs emphasis.
+
+The prompt now includes the saved scene goal (`ai_metadata.scene_goal`), author
+notes (`ai_metadata.notes`), selected character names and writing style preferences.
+These values come from the frozen database snapshot after pending editor saves
+finish. The goal guides the continuation; it is not copied as screenplay text.
+Previously these values were stored in the snapshot but not included in the
+text sent to Ollama.
+
+`generated_full_text` remains readable plain text joined from those paragraphs;
+the matching typed blocks are stored in `critic_metadata.blocks`, with
+`format: "screenplay_blocks_v1"` and `operation: "append"`. A proposed heading,
+when applicable, uses `critic_metadata.heading`. This reuses the existing JSON field without
+adding critic scores or database columns. `backend/api/screenplay.py` handles
+validation and conversion; the output schemas live in `scheams.py`.
+The assistant and preview dialog format these blocks like the manual screenplay.
+Applying a variant inserts its blocks in the scene and records their IDs in
+`editor_metadata.applied_variant`. Applying another variant replaces those blocks
+in place and preserves surrounding author edits. Reapplying the active variant
+leaves the insertion as-is. The editor records each application as one undoable
+change, including any heading supplied by the variant. Older text-only variants
+are inserted as plain action text.
+
+The assistant shows "Generowanie...", then lists the variants with individual previews. It refreshes
 history/variants and ignores late responses after a scene switch. Failed requests
 retain the input for retry. The old `/api/llm/ping` endpoint has been removed.
+The saved-variants panel loads the latest batch for the scene, including on page
+reload. A successful generation replaces the visible batch;
+older variants remain in the database as history. The refresh button only reloads
+the latest saved batch and run status via GET requests. It does not cancel
+generation or return partial output and is disabled while generating.
 Responses have `Cache-Control: no-store`.
 Unavailable Ollama returns 503, a timeout 504, and a missing model or invalid
 upstream response 502 with a descriptive `detail`. The client never downloads
@@ -210,6 +316,7 @@ Paths below are relative to `/api` and do not have trailing slashes:
 | Characters | `GET/POST /projects/{id}/characters`, `GET/PATCH/DELETE /characters/{id}` |
 | Scenes | `GET/POST /projects/{id}/scenes`, `GET/PATCH/DELETE /scenes/{id}` |
 | Local generation | `POST /scenes/{id}/generate` |
+| Cancel generation | `POST /scenes/{id}/cancel-generation` |
 | Cast | `GET/POST /scenes/{id}/cast`, `GET/PATCH/DELETE /cast/{id}` |
 | Prompt history | `GET/POST /scenes/{id}/prompts`, `GET /prompts/{id}`, `GET /prompts/{id}/run` |
 | Generation runs | `GET /scenes/{id}/runs`, `GET /runs/{id}` |
@@ -237,10 +344,11 @@ to the ERD; moving a project to trash does not delete any records.
 Prompt creation accepts `user_prompt` and optional `generation_parameters`
 (`temperature`, `max_tokens`). The server fixes the model to Bielik 11B and
 captures project/act/scene/cast/preferences in `context_snapshot`. Without explicit
-parameters it uses the user's preferences. Prompt history is immutable and scoped
-to a scene. The `/prompts` endpoint only saves the request; use `/scenes/{id}/generate`
-to perform a real generation and create its run/variant. A saved prompt without a
-run returns 404 at `/prompts/{id}/run`.
+parameters it uses the user's preferences. The scene prompt history lists requests
+whose generation run completed successfully. The `POST /prompts` endpoint saves
+a request record. Use `/scenes/{id}/generate` to perform a real generation and
+create its run and variants. A saved request without a run returns 404 at
+`/prompts/{id}/run`.
 Runs, agent executions and generated variants are server-managed read-only data.
 Existing seeded examples are available through their GET endpoints.
 Select a variant with `{ "apply_to_scene": false }` or explicitly apply its text
@@ -343,10 +451,15 @@ The backend suite is divided into:
 - `test_models.py`, `test_seed.py`: ERD constraints, JSON defaults, cascades and seeding.
 - `test_workspace_flow.py`: complete editor payloads, dashboard actions, cast,
   scene moves and prompt snapshots surviving logout and a fresh login.
-- `test_ollama.py`: fixed-model HTTP requests, response validation, connection and
-  timeout failures, and removal of the temporary ping endpoint (without a live LLM).
+- `test_ollama.py`: GPU options, streamed HTTP responses, connection/timeout failures,
+  and cancellation with actual local sockets before headers and after partial tokens.
+- `test_generation_cancel.py`: authenticated/CSRF-protected cancellation, early/late
+  cancellation races, duplicate UUIDs and preservation of unrelated variants.
 - `test_scene_generation.py`: persisted scene context, authenticated/CSRF-protected
   generation, preferences, failed runs and variants, with Ollama mocked at the HTTP-client boundary.
+- `test_screenplay.py`: structured output validation, block IDs/types, speaker ordering,
+  normalization and rejection of malformed blocks. Variant-application tests also
+  verify that those blocks survive a workspace reload.
 
 Frontend tests use Vitest, React Testing Library and jsdom. They run the actual
 components/hooks/API client and intercept fetch at the HTTP boundary with
@@ -365,7 +478,7 @@ npm run build
 
 `npm run test:watch` runs Vitest in watch mode. Test organization:
 
-- `tests/api/`: CSRF, transport failures, request options and all 52 API operations.
+- `tests/api/`: CSRF, transport failures, request options and all 53 API operations.
 - `tests/hooks/`: session restoration/expiry/logout, account preferences, profile,
   project loading, debounced scene saves, cast, undo/redo, structure and prompt history.
 - `tests/services/`: DTO mapping, pagination, metadata preservation and error messages.

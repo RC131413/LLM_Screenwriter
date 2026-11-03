@@ -197,7 +197,7 @@ network failure. Cancelled runs do not display a variant, including after reload
 Cancelling while the editor save is pending prevents the LLM request entirely.
 
 Each variant contains one continuation as an ordered `blocks` array.
-The model's enforced schema accepts `action`, `speech` and `transition`.
+The model's enforced schema accepts `action` and `speech` within one scene.
 A `speech` groups `speaker`, nullable `parenthetical` and `spoken_text`; the backend
 expands it to the existing editor blocks in this order: `character`, optional
 `parenthetical`, `dialogue`. This prevents detached or trailing acting directions.
@@ -230,9 +230,11 @@ Invalid or token-truncated output marks the run as failed without saving a varia
 Dialogue is optional for every scene request. Action-only output is valid without
 special keywords. The panel sends `variant_count` (1–3), and the backend calls
 Ollama sequentially with the same author prompt, scene snapshot and generation
-settings. Later variants encourage direct dialogue where the scene calls for
-conversation. An action block over 600 characters triggers one formatting retry
-for that variant before the batch can be saved.
+settings. The first variant balances action and dialogue, the second emphasizes
+relationships and subtext, and the third emphasizes observable action. Every
+variant can include dialogue and sparse acting directions. An action block over
+600 characters or an explicit boundary inside the scene triggers one formatting
+retry for that variant before the batch can be saved.
 It saves the complete batch in one transaction and returns an array of variants.
 Requests without `variant_count` still return a single variant object.
 Cancellation or a generation failure discards the unfinished batch.
@@ -244,7 +246,8 @@ preserve established facts, exact character names, and the heading's place/time.
 Movement between interior and exterior should end the fragment before the new
 setting; it belongs in another scene. These are writing instructions, not semantic
 guarantees. Unless the author specifies a length, a short fragment is requested.
-Transitions use standard labels; a heading cannot be embedded in their text.
+Each generated fragment ends before the next scene. In the editor, a transition
+can be placed before the next scene's heading when the cut needs emphasis.
 
 The prompt now includes the saved scene goal (`ai_metadata.scene_goal`), author
 notes (`ai_metadata.notes`), selected character names and writing style preferences.

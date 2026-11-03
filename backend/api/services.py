@@ -37,11 +37,17 @@ SCENE_GENERATION_SYSTEM_PROMPT = (
     'speech: type, speaker (nazwa postaci), parenthetical (krótka wskazówka aktorska lub null), '
     'spoken_text (tylko słowa wypowiedziane na głos, bez opisów otoczenia i ruchów). '
     'Nie twórz osobnych character, dialogue ani parenthetical.\n'
-    'transition: opcjonalne krótkie przejście, type i text np. CIĘCIE DO:, bez nazwy miejsca i pory dnia. '
-    'Nagłówek, Miejsce: i Pora dnia: nie należą do blocks.\n'
+    'Każdy wynik to fragment jednej sceny. Bloki zawierają wyłącznie akcję i wypowiedzi. '
+    'Zakończ przed zmianą miejsca lub czasu. Nie wpisuj przejść ani kolejnych nagłówków do blocks.\n'
     'Przykład: {"blocks":[{"type":"action","text":"Światło pada na twarz Anny. Anna otwiera list."},'
     '{"type":"speech","speaker":"ANNA","parenthetical":null,"spoken_text":"To niemożliwe."},'
     '{"type":"action","text":"Anna odkłada list."}]}. '
+)
+
+SCENE_VARIANT_APPROACHES = (
+    'Zrównoważ akcję i dialog odpowiednio do sceny. Jeśli postacie rozmawiają, pokaż ich słowa w osobnych blokach speech.',
+    'Połóż nacisk na relację i podtekst. Jeśli dochodzi do rozmowy, pokaż krótką wymianę kwestii, w której każda coś zmienia.',
+    'Połóż nacisk na obraz i działanie. Pokaż odkrycie przez gest, przedmiot lub decyzję. Zachowaj kwestie niezbędne dla sceny.',
 )
 
 
@@ -50,10 +56,11 @@ def scene_generation_prompt(prompt):
     scene = prompt.context_snapshot['scene']
     from .screenplay import can_generate_heading
     heading_instruction = (
-        'Scena jest pusta i nie ma nagłówka. Dodaj heading: '
-        '{"location_type":"WN.", "location_heading":"CHATA", "time_of_day":"ŚWIT"}. '
-        'location_type: WN. (wnętrze) lub PL. (plener); location_heading: sama nazwa miejsca, '
-        'bez prefiksu i pory dnia. Nie powtarzaj nagłówka w blocks.'
+        'Scena jest pusta i nie ma nagłówka. Najpierw ustal miejsce pierwszego działania na podstawie polecenia '
+        'i celu sceny, a następnie zapisz heading i dopiero potem blocks. '
+        'location_type wybierz według tego, czy pierwsza akcja dzieje się we wnętrzu (WN.) czy w plenerze (PL.). '
+        'location_heading to nazwa tego samego miejsca, bez prefiksu i pory dnia. '
+        'time_of_day to pora pierwszej akcji. Cały fragment rozegraj w miejscu i czasie podanym w heading.'
         if can_generate_heading(scene) else
         'Nie wymyślaj ani nie zwracaj nagłówka. Istniejący nagłówek i pora dnia pozostają bez zmian.'
     )
@@ -84,7 +91,7 @@ def scene_generation_prompt(prompt):
         'Każde nowe działanie zapisz w osobnym krótkim bloku action. Jeśli postacie rozmawiają, podaj ich rzeczywiste słowa w speech zamiast streszczać rozmowę w action. '
         'Pisz wyłącznie to, co kamera widzi lub mikrofon słyszy; emocje wyrażaj zachowaniem. '
         'Zachowaj ustalone fakty, stan wiedzy bohatera i dokładne imiona. '
-        'Jedna scena ma jedno miejsce i porę dnia. Zakończ fragment przed przejściem z wnętrza w plener lub odwrotnie. '
+        'Jedna scena ma jedno miejsce i porę dnia. Jeśli dalsze wydarzenia wymagają innej lokalizacji lub przeskoku w czasie, zakończ przed nimi. '
         'Domyślnie 3–5 krótkich bloków po 1–2 zdania; długość podana przez autora ma pierwszeństwo. '
         'Finał to konkretna czynność, trop lub decyzja, bez przedwczesnego rozwiązania całej zagadki.'
     )

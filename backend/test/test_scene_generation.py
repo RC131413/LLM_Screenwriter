@@ -50,12 +50,33 @@ class SceneGenerationTests(ApiTestCase):
                 }), 201).json()
                 self.assertEqual([variant['variant_number'] for variant in variants], list(range(1, count + 1)))
                 self.assertEqual(generate.call_count, count)
-                base_prompt = generate.call_args_list[0].args[0]
-                self.assertTrue(all(call.args[0].startswith(base_prompt) for call in generate.call_args_list))
-                self.assertTrue(all('PODEJŚCIE WARIANTU' in call.args[0] for call in generate.call_args_list[1:]))
+                prompts = [call.args[0].split('PODEJŚCIE WARIANTU:', 1) for call in generate.call_args_list]
+                self.assertEqual(len({base for base, _ in prompts}), 1)
+                approaches = ['Zrównoważ akcję i dialog', 'Połóż nacisk na relację', 'Połóż nacisk na obraz']
+                for (_, approach), expected in zip(prompts, approaches, strict=False):
+                    self.assertIn(expected, approach)
                 self.assertTrue(all(call.kwargs['temperature'] == 0.4 for call in generate.call_args_list))
                 run = GenerationRun.objects.get(pk=variants[0]['run_id'])
                 self.assertEqual(list(run.variants.values_list('pk', flat=True)), [variant['id'] for variant in variants])
+
+    @patch('backend.ollama.generate')
+    def test_retries_a_cut_or_an_embedded_next_scene_heading(self, generate):
+        self.scene.location_heading = 'PL. CMENTARZ'
+        self.scene.save()
+        for block in (
+            {'type': 'transition', 'text': 'CIĘCIE DO:'},
+            {'type': 'action', 'text': 'Maciek czyta napis.\nWN. CHATA – NOC\nSiada przy stole.'},
+        ):
+            with self.subTest(block=block):
+                generate.reset_mock()
+                generate.side_effect = [json.dumps({'blocks': [block]}), GENERATED_SCENE]
+                response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+                    'user_prompt': 'Kontynuuj scenę.', 'variant_count': 1,
+                }), 201)
+                self.assertEqual(generate.call_count, 2)
+                self.assertIn('POPRAW FORMAT', generate.call_args.args[0])
+                self.assertEqual([b['type'] for b in response.json()[0]['critic_metadata']['blocks']],
+                                 ['character', 'dialogue'])
 
     @patch('backend.ollama.generate', side_effect=[GENERATED_SCENE, OllamaError('Model unavailable', status_code=503)])
     def test_second_call_failure_leaves_no_partial_variants(self, generate):

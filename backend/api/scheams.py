@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from ninja import Schema
-from pydantic import ConfigDict, EmailStr, Field, field_validator
+from pydantic import ConfigDict, EmailStr, Field
 
 
 PositiveId = Annotated[int, Field(gt=0)]
@@ -38,20 +38,8 @@ class GeneratedSpeech(InputSchema):
     spoken_text: str = Field(min_length=1, description='Wyłącznie słowa wypowiedziane na głos przez postać. Opis światła, otoczenia, ruchów i narracja należą do action.')
 
 
-class GeneratedTransition(InputSchema):
-    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-    type: Literal['transition']
-    text: Literal['CIĘCIE DO:', 'PRZENIKANIE DO:', 'ŚCIEMNIENIE.', 'ROZJAŚNIENIE.',
-                  'CUT TO:', 'DISSOLVE TO:', 'FADE IN:', 'FADE OUT.']
-
-    @field_validator('text', mode='before')
-    @classmethod
-    def uppercase_transition(cls, value):
-        return value.strip().upper() if isinstance(value, str) else value
-
-
 class GeneratedScene(InputSchema):
-    blocks: list[Annotated[GeneratedAction | GeneratedSpeech | GeneratedTransition, Field(discriminator='type')]] = Field(min_length=1)
+    blocks: list[Annotated[GeneratedAction | GeneratedSpeech, Field(discriminator='type')]] = Field(min_length=1)
 
 
 class GeneratedHeading(InputSchema):
@@ -67,8 +55,9 @@ class ModelHeading(InputSchema):
     time_of_day: Literal['DZIEŃ', 'NOC', 'RANO', 'ŚWIT', 'WIECZÓR', 'POŁUDNIE', 'PRZEDPOŁUDNIE', 'POPOŁUDNIE', 'ZMIERZCH', 'ZMROK', 'KONTYNUACJA']
 
 
-class GeneratedSceneWithHeading(GeneratedScene):
+class GeneratedSceneWithHeading(InputSchema):
     heading: ModelHeading
+    blocks: list[Annotated[GeneratedAction | GeneratedSpeech, Field(discriminator='type')]] = Field(min_length=1)
 
 
 class EditorBlock(GeneratedBlock):

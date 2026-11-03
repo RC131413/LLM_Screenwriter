@@ -25,13 +25,13 @@ from ninja.utils import check_csrf
 from backend import ollama
 
 from . import scheams as s
-from .screenplay import UnstructuredActionError, append_variant, blocks_text, generated_continuation, scene_output_schema
+from .screenplay import SceneStructureError, append_variant, blocks_text, generated_continuation, scene_output_schema
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
 )
 from .services import (
-    SCENE_GENERATION_SYSTEM_PROMPT,
+    SCENE_GENERATION_SYSTEM_PROMPT, SCENE_VARIANT_APPROACHES,
     generation_is_cancelled, get_owned, lock_project, owned, profile_for, prompt_snapshot,
     save_validated, scene_generation_prompt, validate_avatar,
 )
@@ -480,14 +480,11 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
     results = []
     try:
         for number in range(1, (payload.variant_count or 1) + 1):
-            variant_prompt = model_prompt
-            if number > 1:
-                variant_prompt += (
-                    '\n\nPODEJŚCIE WARIANTU: Jeśli sytuacja obejmuje spotkanie lub rozmowę, '
-                    'pokaż krótką wymianę kwestii w osobnych blokach speech. Przy ważnej kwestii '
-                    'dodaj trafną wskazówkę aktorską, jeśli ustawienia na to pozwalają. '
-                    'Uszanuj polecenie autora, jeśli prosi o scenę niemą.'
-                )
+            variant_prompt = (
+                f'{model_prompt}\n\nPODEJŚCIE WARIANTU: {SCENE_VARIANT_APPROACHES[number - 1]} '
+                'Zastosuj wskazówki aktorskie przy kluczowych kwestiach tylko wtedy, gdy pomagają je zagrać i ustawienia na to pozwalają. '
+                'Uszanuj polecenie autora, jeśli prosi o scenę niemą.'
+            )
             for attempt in range(2):
                 current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
                 if current_status is None:
@@ -506,13 +503,14 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
                     raise ollama.OllamaCancelled()
                 try:
                     blocks, heading = generated_continuation(answer, scene, parentheticals=parentheticals)
-                except UnstructuredActionError:
+                except SceneStructureError as error:
                     if attempt == 1:
                         raise
                     variant_prompt += (
-                        '\n\nPOPRAW FORMAT: Poprzednia odpowiedź skleiła wiele działań w jeden blok. '
+                        f'\n\nPOPRAW FORMAT: {error} '
                         'Napisz od nowa tylko krótki dalszy fragment. Oddziel każde działanie '
-                        'i każdą wypowiedź. Nie streszczaj wcześniejszej sceny.'
+                        'i każdą wypowiedź. Zakończ przed zmianą miejsca lub czasu, bez przejścia do kolejnej sceny. '
+                        'Nie streszczaj wcześniejszej sceny.'
                     )
                 else:
                     results.append((blocks, heading))

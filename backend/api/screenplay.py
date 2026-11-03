@@ -10,8 +10,16 @@ from backend.ollama import OllamaError
 from .scheams import EditorBlock, GeneratedHeading, GeneratedScene, GeneratedSceneWithHeading
 
 
-class UnstructuredActionError(OllamaError):
-    """The model put a long passage into one action block."""
+class SceneStructureError(OllamaError):
+    """The model returned a fragment that cannot be saved as one structured scene."""
+
+
+SCENE_BOUNDARY = re.compile(
+    r'^[ \t]*(?:(?:WN|PL|INT|EXT)\.[ \t]+|(?:CIĘCIE DO|PRZENIKANIE DO|CUT TO|DISSOLVE TO|FADE IN)[ \t]*:'
+    r'|(?:ŚCIEMNIENIE|ROZJAŚNIENIE|FADE OUT)\.?[ \t]*$)',
+    re.IGNORECASE | re.MULTILINE,
+)
+SCENE_BOUNDARY_ERROR = 'Model próbował rozpocząć kolejną scenę w tym samym wariancie.'
 
 
 def _parse_generation(answer, allow_heading=False):
@@ -19,6 +27,8 @@ def _parse_generation(answer, allow_heading=False):
         schema = GeneratedSceneWithHeading if allow_heading else GeneratedScene
         return schema.model_validate_json(answer)
     except PydanticValidationError as error:
+        if any(issue.get('ctx', {}).get('tag') == 'transition' for issue in error.errors()):
+            raise SceneStructureError(SCENE_BOUNDARY_ERROR) from error
         raise OllamaError('Model zwrócił nieprawidłowy format sceny. Spróbuj ponownie.') from error
 
 
@@ -42,7 +52,7 @@ def _generated_blocks(scene):
                 add('parenthetical', f'({direction})')
             add('dialogue', block.spoken_text)
         else:
-            add(block.type, block.text.upper() if block.type == 'transition' else block.text)
+            add('action', block.text)
     return blocks
 
 
@@ -210,8 +220,10 @@ def generated_continuation(answer, scene, *, parentheticals='sparingly'):
     })
     if not blocks:
         raise OllamaError('Model zwrócił sam nagłówek bez treści sceny. Spróbuj ponownie.')
+    if any(block['type'] == 'action' and SCENE_BOUNDARY.search(block['text']) for block in blocks):
+        raise SceneStructureError(SCENE_BOUNDARY_ERROR)
     if any(block['type'] == 'action' and len(block['text']) > 600 for block in blocks):
-        raise UnstructuredActionError('Model zwrócił zbyt długi blok akcji. Skróć polecenie do jednego fragmentu sceny.')
+        raise SceneStructureError('Model zwrócił zbyt długi blok akcji. Skróć polecenie do jednego fragmentu sceny.')
     previous_blocks = existing_scene_blocks(scene)
     original = scene.get('content_text', '')
     if not original.strip():

@@ -13,13 +13,12 @@ class ScreenplayFormatTests(SimpleTestCase):
         blocks = generated_scene_blocks(json.dumps({'blocks': [
             {'type': 'action', 'text': '  Anna otwiera kopertę.  '},
             {'type': 'speech', 'speaker': 'Anna', 'parenthetical': 'szeptem', 'spoken_text': 'Znalazłam list.'},
-            {'type': 'transition', 'text': 'cięcie do:'},
         ]}))
-        self.assertEqual([block['type'] for block in blocks], ['action', 'character', 'parenthetical', 'dialogue', 'transition'])
+        self.assertEqual([block['type'] for block in blocks], ['action', 'character', 'parenthetical', 'dialogue'])
         self.assertEqual([block['text'] for block in blocks], [
-            'Anna otwiera kopertę.', 'ANNA', '(szeptem)', 'Znalazłam list.', 'CIĘCIE DO:',
+            'Anna otwiera kopertę.', 'ANNA', '(szeptem)', 'Znalazłam list.',
         ])
-        self.assertEqual(len({UUID(block['id']) for block in blocks}), 5)
+        self.assertEqual(len({UUID(block['id']) for block in blocks}), 4)
         self.assertEqual(blocks_text(blocks), '\n\n'.join(block['text'] for block in blocks))
         self.assertEqual(variant_editor_blocks(blocks), blocks)
 

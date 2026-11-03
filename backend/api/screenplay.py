@@ -13,6 +13,34 @@ from .scheams import EditorBlock, GeneratedHeading, GeneratedScene, GeneratedSce
 class SceneStructureError(OllamaError):
     """The model returned a fragment that cannot be saved as one structured scene."""
 
+UNCLEAR_PROMPT = 'Nie rozumiem polecenia. Napisz krótko, co ma się wydarzyć albo jak mam poprowadzić scenę.'
+
+
+def obviously_unintelligible(prompt):
+    original = prompt.strip()
+    text = original.casefold()
+    letters = {char for char in text if char.isalpha()}
+    if not letters or (len(letters) == 1 and len(text) > 3):
+        return True
+    # A whole instruction like "adada" or "ababab" is a repeated keystroke pattern.
+    if text.isalpha() and len(text) >= 5 and text[2:] == text[:-2]:
+        return True
+    # Reject short consonant-only fragments such as "wq gwg". Keep acronyms,
+    # non-Polish scripts and longer instructions for the model to interpret.
+    words = text.split()
+    if (
+        not original.isupper()
+        and 1 <= len(words) <= 3
+        and 5 <= sum(map(len, words)) <= 12
+        and all(re.fullmatch(r'[bcćdfghjklłmnńpqrsśtvwxzźż]+', word) for word in words)
+    ):
+        return True
+    keyboard_rows = ('qwertyuiop', 'asdfghjkl', 'zxcvbnm')
+    return bool(words) and all(
+        len(word) >= 4 and any(word in row or word in row[::-1] for row in keyboard_rows)
+        for word in words
+    )
+
 
 SCENE_BOUNDARY = re.compile(
     r'^[ \t]*(?:(?:WN|PL|INT|EXT)\.[ \t]+|(?:CIĘCIE DO|PRZENIKANIE DO|CUT TO|DISSOLVE TO|FADE IN)[ \t]*:'

@@ -277,6 +277,13 @@ class CancelGenerationIn(PromptIn):
     generation_id: UUID
 
 
+class ActiveGenerationOut(Schema):
+    scene_id: int
+    generation_id: UUID
+    user_prompt: str
+    variant_count: Literal[1, 2, 3]
+
+
 class PromptOut(Schema):
     id: int
     scene_id: int

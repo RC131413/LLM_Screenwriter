@@ -1,8 +1,10 @@
 import json
+from datetime import timedelta
 from unittest.mock import patch
 from uuid import uuid4
 
 from django.test import Client
+from django.utils import timezone
 
 from backend.api.models import GenerationRun, SceneGenerationRequest, SceneVariant
 from backend.ollama import OllamaCancelled
@@ -14,6 +16,36 @@ ANSWER = json.dumps({'blocks': [{'type': 'speech', 'speaker': 'ANNA', 'parenthet
 
 
 class GenerationCancellationTests(ApiTestCase):
+    @patch('backend.ollama.generate')
+    def test_active_run_is_recoverable_and_blocks_another_scene(self, generate):
+        payload = self.payload()
+
+        def model(*args, **kwargs):
+            active = self.assert_status(self.send('get', '/generation/active'), 200).json()
+            self.assertEqual(active, {**payload, 'scene_id': self.scene.pk, 'variant_count': 1})
+            other_account = Client()
+            other_account.force_login(self.other_user)
+            self.assertIsNone(self.send('get', '/generation/active', client=other_account).json())
+            other_scene = f'/scenes/{self.next_scene.pk}/generate'
+            self.assert_status(self.send('post', other_scene, self.payload()), 409)
+            return ANSWER
+
+        generate.side_effect = model
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 201)
+        self.assertIsNone(self.send('get', '/generation/active').json())
+        generate.assert_called_once()
+
+    def test_active_run_without_a_heartbeat_expires(self):
+        run = GenerationRun.objects.create(
+            request=SceneGenerationRequest.objects.create(scene=self.scene, user_prompt='Dalej'),
+            status='running', run_metadata={'generation_id': str(uuid4())},
+        )
+        GenerationRun.objects.filter(pk=run.pk).update(updated_at=timezone.now() - timedelta(minutes=2))
+        self.assertIsNone(self.assert_status(self.send('get', '/generation/active'), 200).json())
+        run.refresh_from_db()
+        self.assertEqual(run.status, 'failed')
+        self.assertIsNotNone(run.finished_at)
+
     def payload(self):
         return {'generation_id': str(uuid4()), 'user_prompt': 'Napisz scenę.'}
 

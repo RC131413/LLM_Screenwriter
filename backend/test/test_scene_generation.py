@@ -23,6 +23,20 @@ def generation_answer(*args, **kwargs):
 
 class SceneGenerationTests(ApiTestCase):
     @patch('backend.ollama.generate')
+    def test_unintelligible_prompt_does_not_save_variants_or_enter_history(self, generate):
+        path = f'/scenes/{self.scene.pk}/generate'
+        count = SceneVariant.objects.count()
+        self.assertIn('Nie rozumiem', self.assert_status(self.send('post', path, {'user_prompt': '?!...'}), 422).json()['detail'])
+        self.assertIn('Nie rozumiem', self.assert_status(self.send('post', path, {'user_prompt': 'adada'}), 422).json()['detail'])
+        self.assertIn('Nie rozumiem', self.assert_status(self.send('post', path, {'user_prompt': 'wq gwg'}), 422).json()['detail'])
+        response = self.send('post', path, {'user_prompt': 'asdfgh qwerty', 'variant_count': 3})
+        self.assertIn('Nie rozumiem', self.assert_status(response, 422).json()['detail'])
+        generate.assert_not_called()
+        self.assertEqual(SceneVariant.objects.count(), count)
+        self.assertEqual(self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count'], 1)
+        self.assertIsNone(self.assert_status(self.send('get', '/generation/active'), 200).json())
+
+    @patch('backend.ollama.generate')
     def test_overlong_action_is_retried_before_saving_the_batch(self, generate):
         self.scene.location_heading = 'WN. DOM'
         self.scene.save()
@@ -206,7 +220,9 @@ class SceneGenerationTests(ApiTestCase):
 
     @patch('backend.ollama.generate', side_effect=generation_answer)
     def test_can_generate_for_an_empty_scene(self, generate_text):
-        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Napisz scenę spotkania.'}), 201)
+        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'wymyśl coś dalej'}), 201)
+        generate_text.assert_called_once()
+        self.assertIn('wymyśl coś dalej', generate_text.call_args.args[0])
         self.assertEqual(response.json()['critic_metadata']['heading'], {'location_heading': 'WN. DOM', 'time_of_day': 'RANO'})
         self.assertIn('(Scena nie zawiera jeszcze tekstu.)', generate_text.call_args.args[0])
 

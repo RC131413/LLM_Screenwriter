@@ -25,7 +25,10 @@ from ninja.utils import check_csrf
 from backend import ollama
 
 from . import scheams as s
-from .screenplay import SceneStructureError, append_variant, blocks_text, generated_continuation, scene_output_schema
+from .screenplay import (
+    UNCLEAR_PROMPT, SceneStructureError, append_variant, blocks_text,
+    generated_continuation, obviously_unintelligible, scene_output_schema,
+)
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
@@ -461,12 +464,15 @@ def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', syste
 
 
 @api.post('/scenes/{scene_id}/generate',
-          response={201: list[s.VariantOut] | s.VariantOut, 409: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
+          response={201: list[s.VariantOut] | s.VariantOut, 409: s.MessageOut, 422: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
 def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, response: HttpResponse):
     """Generate a batch sequentially, then persist it atomically."""
     response['Cache-Control'] = 'no-store'
     if not payload.user_prompt.strip():
         raise ValidationError({'user_prompt': 'Wpisz instrukcję dla modelu.'})
+    if obviously_unintelligible(payload.user_prompt):
+        get_owned(Scene, request.auth, scene_id)
+        return 422, {'detail': UNCLEAR_PROMPT}
     run = _prepare_generation(request, scene_id, payload)
     if run.status == 'cancelled':
         return 409, {'detail': 'Generowanie zostało anulowane.'}
@@ -478,6 +484,10 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
     output_schema = scene_output_schema(scene)
     parentheticals = prompt.context_snapshot.get('writing_style_preferences', {}).get('parentheticals', 'sparingly')
     results = []
+
+    def is_cancelled():
+        return generation_is_cancelled(run.pk)
+
     try:
         for number in range(1, (payload.variant_count or 1) + 1):
             variant_prompt = (
@@ -489,17 +499,17 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
                 current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
                 if current_status is None:
                     raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
-                if current_status == 'cancelled':
+                if current_status != 'running':
                     raise ollama.OllamaCancelled()
                 answer = ollama.generate(
                     variant_prompt, output_schema=output_schema,
-                    is_cancelled=lambda: generation_is_cancelled(run.pk),
+                    is_cancelled=is_cancelled,
                     **prompt.generation_parameters,
                 )
                 current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
                 if current_status is None:
                     raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
-                if current_status == 'cancelled':
+                if current_status != 'running':
                     raise ollama.OllamaCancelled()
                 try:
                     blocks, heading = generated_continuation(answer, scene, parentheticals=parentheticals)
@@ -526,8 +536,8 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
         lock_project(request.auth, prompt.scene.project_id)
         # A scene can have been deleted while Ollama was generating its response.
         run = get_object_or_404(GenerationRun.objects.select_for_update(), pk=run.pk)
-        if run.status == 'cancelled':
-            return 409, {'detail': 'Generowanie zostało anulowane.'}
+        if run.status != 'running':
+            return 409, {'detail': run.error_message or 'Generowanie zostało zatrzymane.'}
         variants = [save_validated(SceneVariant(
             run=run, scene_id=prompt.scene_id, variant_number=number,
             title=f'Wariant {number}' if payload.variant_count is not None else 'Wariant Bielika',
@@ -547,6 +557,9 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
 @transaction.atomic
 def _prepare_generation(request, scene_id, payload, *, cancelled=False):
     scene = get_owned(Scene, request.auth, scene_id)
+    if not cancelled:
+        # Serialize starts for this account, including starts in other projects and browser tabs.
+        User.objects.select_for_update().get(pk=request.auth.pk)
     lock_project(request.auth, scene.project_id)
     generation_id = str(payload.generation_id or uuid4())
     existing = GenerationRun.objects.select_related('request').filter(
@@ -556,14 +569,42 @@ def _prepare_generation(request, scene_id, payload, *, cancelled=False):
         if not cancelled and existing.status != 'cancelled':
             raise HttpError(409, 'To żądanie generowania zostało już przyjęte.')
         return existing
+    if not cancelled and _active_generation(request.auth) is not None:
+        raise HttpError(409, 'Inna scena jest już generowana. Poczekaj na zakończenie albo anuluj generowanie.')
     prompt = _create_prompt(
         request, scene_id, payload, model_name=ollama.OLLAMA_MODEL,
         system_prompt=SCENE_GENERATION_SYSTEM_PROMPT,
     )
     return save_validated(GenerationRun(
         request=prompt, status='cancelled' if cancelled else 'running', started_at=timezone.now(),
-        finished_at=timezone.now() if cancelled else None, run_metadata={'generation_id': generation_id},
+        finished_at=timezone.now() if cancelled else None,
+        run_metadata={'generation_id': generation_id, 'variant_count': getattr(payload, 'variant_count', None) or 1},
     ))
+
+
+def _active_generation(user):
+    runs = owned(GenerationRun, user).filter(status='running', run_metadata__has_key='generation_id')
+    now = timezone.now()
+    # After a server restart there is no Ollama watcher to renew this lease.
+    GenerationRun.objects.filter(
+        pk__in=runs.values('pk'), status='running', updated_at__lt=now - timedelta(minutes=1),
+    ).update(
+        status='failed', finished_at=now, updated_at=now,
+        error_message='Generowanie zostało przerwane. Spróbuj ponownie.',
+    )
+    return runs.select_related('request').first()
+
+
+@api.get('/generation/active', response=s.ActiveGenerationOut | None, tags=['LLM'])
+def active_generation(request, response: HttpResponse):
+    response['Cache-Control'] = 'no-store'
+    run = _active_generation(request.auth)
+    if run is None:
+        return None
+    return {
+        'scene_id': run.request.scene_id, 'generation_id': run.run_metadata['generation_id'],
+        'user_prompt': run.request.user_prompt, 'variant_count': run.run_metadata.get('variant_count', 1),
+    }
 
 
 @api.post('/scenes/{scene_id}/cancel-generation', response=s.MessageOut, tags=['LLM'])

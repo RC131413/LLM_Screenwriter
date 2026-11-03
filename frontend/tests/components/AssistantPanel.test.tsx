@@ -1,10 +1,20 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { AssistantPanel } from '../../src/components/AssistantPanel';
+import { AssistantPanel as Panel } from '../../src/components/AssistantPanel';
+import { useGeneration } from '../../src/hooks/useGeneration';
+import type { ComponentProps } from 'react';
 import { toProject } from '../../src/services/workspaceData';
 import { promptFixture, variantFixture, workspaceFixture } from '../support/fixtures';
-import { deferred, interceptHttp, jsonResponse } from '../support/http';
+import { deferred, interceptHttp as intercept, jsonResponse } from '../support/http';
+
+const interceptHttp = (handle: Parameters<typeof intercept>[0]) =>
+  intercept(call => call.path === '/generation/active' ? jsonResponse(null) : handle(call));
+
+function AssistantPanel(props: Omit<ComponentProps<typeof Panel>, 'generation'>) {
+  const generation = useGeneration(1);
+  return <Panel {...props} generation={generation} />;
+}
 
 const project = () => toProject(workspaceFixture());
 const props = () => {
@@ -31,7 +41,7 @@ describe('assistant using stored backend data', () => {
     let fail = true;
     interceptHttp(call => {
       if (call.path === '/scenes/20/generate') return generation.promise;
-      if (call.path === '/scenes/20/cancel-generation') return fail ? jsonResponse({ detail: 'Offline' }, 503) : jsonResponse({ detail: 'Anulowano' });
+      if (call.path === '/scenes/20/cancel-generation') return fail ? jsonResponse({ detail: 'Offline' }, 503) : jsonResponse({ detail: 'Generowanie anulowane. Nie zapisano wariantu.' });
       return jsonResponse({ items: [], count: 0 });
     });
     render(<AssistantPanel {...props()} />);
@@ -41,8 +51,6 @@ describe('assistant using stored backend data', () => {
     await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się potwierdzić anulowania');
     expect(screen.queryByText('Generowanie anulowane. Nie zapisano wariantu.')).not.toBeInTheDocument();
-    await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
-    expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
     expect(await screen.findByText('Generowanie anulowane. Nie zapisano wariantu.')).toBeInTheDocument();
@@ -70,7 +78,7 @@ describe('assistant using stored backend data', () => {
     const abort = http.calls.find(call => call.path === '/scenes/20/cancel-generation')!;
     expect(request.body).toEqual({ ...(abort.body as object), variant_count: 1 });
     expect(abort.headers.get('X-CSRFToken')).toBe('test-csrf');
-    await act(async () => { cancellation.resolve(jsonResponse({ detail: 'Anulowano' })); });
+    await act(async () => { cancellation.resolve(jsonResponse({ detail: 'Generowanie anulowane. Nie zapisano wariantu.' })); });
     expect(await screen.findByText('Generowanie anulowane. Nie zapisano wariantu.')).toBeInTheDocument();
     expect(request.init.signal?.aborted).toBe(true);
     await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
@@ -105,7 +113,7 @@ describe('assistant using stored backend data', () => {
     await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
     await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
     expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();
-    await act(async () => { cancellation.resolve(jsonResponse({ detail: 'Anulowano' })); });
+    await act(async () => { cancellation.resolve(jsonResponse({ detail: 'Generowanie anulowane. Nie zapisano wariantu.' })); });
     expect(await screen.findByText('Generowanie anulowane. Nie zapisano wariantu.')).toBeInTheDocument();
   });
 
@@ -184,12 +192,12 @@ describe('assistant using stored backend data', () => {
     expect(screen.getByText('Generowanie... Oczekiwanie na odpowiedź Bielika.')).toHaveAttribute('role', 'status');
     await act(async () => { preparation.resolve(); });
     await waitFor(() => expect(http.calls.some(call => call.path === '/scenes/20/generate')).toBe(true));
-    const readsBeforeRefresh = http.calls.filter(call => call.method === 'GET').length;
+    const readsBeforeRefresh = http.calls.filter(call => call.path.endsWith('/variants')).length;
     const refresh = screen.getByRole('button', { name: 'Odśwież warianty i przebieg' });
     expect(refresh).toBeDisabled();
     expect(refresh).toHaveAttribute('title', 'Pobierz ponownie ostatnią serię wariantów i status.');
     await user.click(refresh);
-    expect(http.calls.filter(call => call.method === 'GET')).toHaveLength(readsBeforeRefresh);
+    expect(http.calls.filter(call => call.path.endsWith('/variants'))).toHaveLength(readsBeforeRefresh);
     expect(http.calls.find(call => call.path === '/scenes/20/generate')?.init.signal?.aborted).toBe(false);
     await user.click(screen.getByRole('button', { name: 'Generowanie...' }));
     expect(http.calls.filter(call => call.method === 'POST')).toHaveLength(1);
@@ -242,9 +250,13 @@ describe('assistant using stored backend data', () => {
     await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
     await waitFor(() => expect(http.calls.some(call => call.method === 'POST')).toBe(true));
     rerender(<AssistantPanel {...component} scene={{ ...component.scene, id: '21', title: 'Druga scena' }} />);
-    expect(http.calls.find(call => call.method === 'POST')?.init.signal?.aborted).toBe(true);
+    expect(http.calls.find(call => call.method === 'POST')?.init.signal?.aborted).toBe(false);
+    expect(screen.getByText(/Trwa generowanie w innej scenie/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Kierunek sceny'), 'Dopisz dialog');
+    expect(screen.getByRole('button', { name: 'Generuj scenę' })).toBeDisabled();
     await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
-    expect(screen.getByLabelText('Kierunek sceny')).toHaveValue('');
+    expect(screen.getByLabelText('Kierunek sceny')).toHaveValue('Dopisz dialog');
+    expect(screen.getByRole('button', { name: 'Generuj scenę' })).toBeEnabled();
     expect(screen.queryByText('Znalazłam list.')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();
   });

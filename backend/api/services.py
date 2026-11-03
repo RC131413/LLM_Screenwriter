@@ -1,12 +1,14 @@
 """Ownership checks and shared write operations for the HTTP API."""
 
 import json
+from datetime import timedelta
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
 from django.db.models import JSONField
 from django.db import connections
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
@@ -133,7 +135,10 @@ def owned(model, user):
 def generation_is_cancelled(run_id):
     """Called by the cancellation watcher; release its thread-local DB connection."""
     try:
-        return not GenerationRun.objects.filter(pk=run_id, status='running').exists()
+        runs = GenerationRun.objects.filter(pk=run_id, status='running')
+        now = timezone.now()
+        return not (runs.filter(updated_at__lt=now - timedelta(seconds=10)).update(updated_at=now)
+                    or runs.exists())
     finally:
         connections['default'].close()
 

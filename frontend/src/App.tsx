@@ -5,6 +5,7 @@ import { useWorkspace } from './hooks/useWorkspace';
 import { useProjectNavigation } from './hooks/useProjectNavigation';
 import { usePreferences } from './hooks/usePreferences';
 import { useProfile } from './hooks/useProfile';
+import { useGeneration } from './hooks/useGeneration';
 import { TopBar } from './components/TopBar';
 import { SceneSidebar } from './components/SceneSidebar';
 import { SceneEditor } from './components/SceneEditor';
@@ -27,6 +28,7 @@ import type { DashboardCollection, View } from './types';
 
 export default function App() {
   const session = useSession();
+  const generation = useGeneration(session.user?.id);
   const workspace = useWorkspace(session.user?.id);
   const preferences = usePreferences(session.user?.id);
   const account = useProfile(session.user, session.refresh);
@@ -34,7 +36,9 @@ export default function App() {
   const project = workspace.projects.find(item => item.id === navigation.projectId && !isInTrash(item));
   const [dashboardCollection, setDashboardCollection] = useState<DashboardCollection>('all');
   const [sceneId, setSceneId] = useState<string>();
-  const scene = project?.scenes.find(item => item.id === sceneId) ?? project?.scenes[0];
+  const sceneKey = `agentdraft.scene.${session.user?.id}.${project?.id}`;
+  const selectedSceneId = sceneId ?? sessionStorage.getItem(sceneKey);
+  const scene = project?.scenes.find(item => item.id === selectedSceneId) ?? project?.scenes[0];
   const [view, setView] = useState<View>('script');
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 1000);
   const [assistantOpen, setAssistantOpen] = useState(() => window.innerWidth > 760);
@@ -53,7 +57,7 @@ export default function App() {
     try { await action(); }
     catch (failure) { setOperationError(errorMessage(failure)); }
   }
-  function selectScene(id: string) { setSceneId(id); setView('script'); if (window.innerWidth <= 1000) setSidebarOpen(false); }
+  function selectScene(id: string) { sessionStorage.setItem(sceneKey, id); setSceneId(id); setView('script'); if (window.innerWidth <= 1000) setSidebarOpen(false); }
   function switchProject(id: string) { void perform(async () => { await workspace.flush(); navigation.openProject(id); setSceneId(undefined); setView('script'); }); }
   function editProject(id: string) { setEditingProjectId(id); setModal('editProject'); }
   const logout = () => { void perform(async () => { await workspace.flush(); await session.logout(); }); };
@@ -98,7 +102,7 @@ export default function App() {
               <CharactersView key={project.id} project={project} onSave={character => workspace.saveCharacter(project.id, character)} onDelete={id => workspace.removeCharacter(project.id, id)} />}
           </div>
         </main>
-        {assistantOpen && <AssistantPanel key={project.id} project={project} scene={scene} onSelect={selectScene} onChange={next => { if (!workspace.mutating) workspace.updateScene(next); }} onClose={() => setAssistantOpen(false)} onPrepare={workspace.flush}
+        {assistantOpen && <AssistantPanel key={project.id} project={project} scene={scene} generation={generation} onSelect={selectScene} onChange={next => { if (!workspace.mutating) workspace.updateScene(next); }} onClose={() => setAssistantOpen(false)} onPrepare={workspace.flush}
           onApply={async variantId => { const changed = await workspace.applyVariant(project.id, variantId); setNotice(changed ? 'Wariant zastosowany.' : 'Wariant jest już zastosowany.'); }} />}
       </div>
     </> : <ProjectDashboard profile={profile} onAccountSettings={() => navigation.openSettings()} onLogout={logout} projects={workspace.projects} collection={dashboardCollection} onCollection={setDashboardCollection} onOpen={switchProject} onCreate={() => setModal('project')} onEdit={editProject} onDelete={setDeletingProjectId}

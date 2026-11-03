@@ -7,6 +7,57 @@ import { deferred, jsonResponse } from '../support/http';
 import { workspaceHttp } from '../support/workspaceHttp';
 
 describe('application → hooks → API client → HTTP', () => {
+  it('restores a running generation after visiting statistics and reloading the editor', async () => {
+    const response = deferred<Response>();
+    let active: { scene_id: number; user_prompt: string; generation_id: string; variant_count: number } | null = null;
+    const http = workspaceHttp((call, workspace) => {
+      if (call.path === '/users/me') return jsonResponse(userFixture());
+      if (call.path === '/users/me/preferences') return jsonResponse(preferencesFixture());
+      if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
+      if (call.path === '/generation/active') return jsonResponse(active);
+      if (call.path === '/scenes/20/generate') {
+        active = { ...(call.body as NonNullable<typeof active>), scene_id: 20 };
+        return response.promise;
+      }
+      if (call.path === '/scenes/20/cancel-generation') {
+        active = null;
+        return jsonResponse({ detail: 'Generowanie anulowane.' });
+      }
+      if (['/scenes/20/prompts', '/scenes/20/runs', '/scenes/20/variants'].includes(call.path)) {
+        return jsonResponse({ items: [], count: 0 });
+      }
+      return undefined;
+    });
+    const mounted = render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('link', { name: 'Otwórz projekt Nocny pociąg' }));
+    await user.type(await screen.findByLabelText('Kierunek sceny'), 'Pisz dalej');
+    await user.click(screen.getByRole('button', { name: '2' }));
+    await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
+    await waitFor(() => expect(active).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: /Menu użytkownika/ }));
+    await user.click(screen.getByRole('menuitem', { name: 'Ustawienia' }));
+    await user.click(await screen.findByRole('tab', { name: 'Statystyki' }));
+    await user.click(screen.getByRole('link', { name: 'Wróć do edytora' }));
+    expect(await screen.findByLabelText('Kierunek sceny')).toHaveValue('Pisz dalej');
+    expect(screen.getByRole('button', { name: 'Anuluj generowanie' })).toBeEnabled();
+    const original = http.calls.find(call => call.path === '/scenes/20/generate')!;
+    expect(original.init.signal?.aborted).toBe(false);
+
+    mounted.unmount();
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Anuluj generowanie' })).toBeEnabled());
+    expect(screen.getByLabelText('Kierunek sceny')).toHaveValue('Pisz dalej');
+    expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
+    expect(await screen.findByText('Generowanie anulowane.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generuj scenę' })).toBeEnabled();
+    expect(http.calls.find(call => call.path === '/scenes/20/cancel-generation')?.body)
+      .toEqual({ user_prompt: 'Pisz dalej', generation_id: (original.body as { generation_id: string }).generation_id });
+    expect(http.calls.filter(call => call.path === '/scenes/20/generate')).toHaveLength(1);
+    await act(async () => { response.resolve(jsonResponse({ detail: 'Generowanie anulowane.' }, 409)); });
+  });
+
   it('flushes editor changes, previews structured generation and applies it to the correct editor blocks', async () => {
     let generated = false;
     let sourceText = '';

@@ -170,6 +170,10 @@ export interface GenerationParametersInput { temperature?: number; max_tokens?: 
 export interface CreatePromptInput { user_prompt: string; generation_parameters?: GenerationParametersInput | null }
 export interface GenerateSceneInput extends CreatePromptInput { generation_id?: string; variant_count: 1 | 2 | 3 }
 export interface CancelGenerationInput extends CreatePromptInput { generation_id: string }
+export interface ApiActiveGeneration extends CancelGenerationInput {
+  scene_id: ApiId;
+  variant_count: 1 | 2 | 3;
+}
 export interface ApiPrompt {
   id: ApiId;
   scene_id: ApiId;
@@ -482,6 +486,8 @@ export const promptsApi = {
 };
 
 export const runsApi = {
+  active: (options: CallOptions = {}) =>
+    apiRequest<ApiActiveGeneration | null>('generation/active', options),
   list: (sceneId: ApiId, params: PaginationParams = {}, options: CallOptions = {}) =>
     apiRequest<Page<ApiGenerationRun>>(`scenes/${id(sceneId)}/runs`, { ...options, query: { ...params } }),
   get: (runId: ApiId, options: CallOptions = {}) => apiRequest<ApiRunDetail>(`runs/${id(runId)}`, options),

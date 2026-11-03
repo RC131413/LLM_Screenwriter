@@ -17,7 +17,10 @@ function readLocation(): { projectId?: string; settingsTab?: SettingsTab; authVi
 
 export function useProjectNavigation() {
   const [location, setLocation] = useState(readLocation);
-  const [returnHref, setReturnHref] = useState('#projects');
+  const [returnHref, setReturnHref] = useState(() => {
+    const saved = sessionStorage.getItem('agentdraft.settingsReturn');
+    return saved?.startsWith('#project/') ? saved : '#projects';
+  });
   useEffect(() => {
     const sync = () => setLocation(readLocation());
     window.addEventListener('hashchange', sync);
@@ -28,7 +31,11 @@ export function useProjectNavigation() {
     ...location,
     returnHref,
     openSettings: (tab: SettingsTab = 'account') => {
-      if (!location.settingsTab) setReturnHref(location.projectId ? projectHref(location.projectId) : '#projects');
+      if (!location.settingsTab) {
+        const href = location.projectId ? projectHref(location.projectId) : '#projects';
+        sessionStorage.setItem('agentdraft.settingsReturn', href);
+        setReturnHref(href);
+      }
       window.location.hash = `#settings/${tab}`;
     },
     openProject: (id: string) => { window.location.hash = projectHref(id); },

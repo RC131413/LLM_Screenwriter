@@ -258,42 +258,80 @@ def existing_scene_blocks(scene):
 
 def append_variant(scene, variant):
     metadata = dict(scene.editor_metadata)
-    applied = metadata.get('applied_variant_ids', [])
-    applied = [value for value in applied if isinstance(value, int)] if isinstance(applied, list) else []
-    if variant.pk in applied:
-        return None
     current = {
         'content_text': scene.content_text, 'editor_metadata': metadata,
         'location_heading': scene.location_heading, 'time_of_day': scene.time_of_day,
     }
     old_blocks = existing_scene_blocks(current)
+    active = metadata.get('applied_variant')
+    if not isinstance(active, dict):
+        active = {}
+        legacy_ids = metadata.get('applied_variant_ids')
+        if isinstance(legacy_ids, list) and legacy_ids and type(legacy_ids[-1]) is int:
+            previous = scene.variants.filter(pk=legacy_ids[-1]).first()
+            if previous:
+                previous_blocks = previous.critic_metadata.get('blocks')
+                if isinstance(previous_blocks, list):
+                    ids = [block.get('id') for block in previous_blocks if isinstance(block, dict)]
+                else:
+                    ids = [block['id'] for block in old_blocks
+                           if block['type'] == 'action' and block['text'] == previous.generated_full_text]
+                    if len(ids) != 1:
+                        ids = []
+                active = {'id': previous.pk, 'block_ids': ids}
+                previous_source = previous.run.request.context_snapshot.get('scene')
+                if isinstance(previous_source, dict) and can_generate_heading(previous_source):
+                    active['heading'] = previous.critic_metadata.get('heading')
+    active_ids = active.get('block_ids', [])
+    active_ids = {value for value in active_ids if isinstance(value, str)} if isinstance(active_ids, list) else set()
+    replaced = [index for index, block in enumerate(old_blocks) if block['id'] in active_ids]
+    if active.get('id') == variant.pk and (replaced or not active_ids or 'applied_variant' not in metadata):
+        return None
+    position = replaced[0] if replaced else len(old_blocks)
+    if replaced:
+        if scene.content_text.strip() and scene.content_text != blocks_text(old_blocks):
+            raise ValidationError({'content_text': 'Zapisany tekst i bloki sceny różnią się. Zapisz scenę w edytorze przed podmianą wariantu.'})
+        old_blocks = [block for block in old_blocks if block['id'] not in active_ids]
     addition = variant_editor_blocks(variant.critic_metadata.get('blocks'))
     if addition is None:
         addition = [{'id': str(uuid4()), 'type': 'action', 'text': variant.generated_full_text}]
     source = variant.run.request.context_snapshot.get('scene')
-    apply_heading = isinstance(source, dict) and can_generate_heading(current) and can_generate_heading(source)
+    current_heading = {'location_heading': scene.location_heading, 'time_of_day': scene.time_of_day}
+    auto_heading = active.get('heading') == current_heading
+    apply_heading = isinstance(source, dict) and can_generate_heading(source) and (
+        can_generate_heading(current) or auto_heading
+    )
     if isinstance(source, dict):
         addition = remove_repeated_prefix(source.get('content_text', ''), addition)
-    base_text = scene.content_text if scene.content_text.strip() else blocks_text(old_blocks)
+    prefix = old_blocks[:position]
+    base_text = blocks_text(prefix)
+    if not replaced and scene.content_text.strip():
+        base_text = scene.content_text
     addition = remove_repeated_prefix(base_text, addition)
-    if old_blocks and addition and old_blocks[-1]['type'] == addition[0]['type'] == 'character' and old_blocks[-1]['text'].strip().casefold() == addition[0]['text'].strip().casefold():
+    if (prefix and addition and prefix[-1]['type'] == addition[0]['type'] == 'character'
+            and prefix[-1]['text'].strip().casefold() == addition[0]['text'].strip().casefold()):
         addition = addition[1:]
     used_ids = {block['id'] for block in old_blocks}
     for block in addition:
         if block['id'] in used_ids:
             block['id'] = str(uuid4())
         used_ids.add(block['id'])
-    metadata['blocks'] = old_blocks + addition
-    metadata['applied_variant_ids'] = [*applied, variant.pk]
+    metadata['blocks'] = prefix + addition + old_blocks[position:]
+    metadata['applied_variant_ids'] = [variant.pk]
+    metadata['applied_variant'] = {'id': variant.pk, 'block_ids': [block['id'] for block in addition]}
+    if auto_heading:
+        metadata['applied_variant']['heading'] = current_heading
     extra_text = blocks_text(addition)
     changes = {
-        'content_text': base_text + ('\n\n' if base_text.strip() and extra_text else '') + extra_text,
+        'content_text': blocks_text(metadata['blocks']) if replaced else
+        base_text + ('\n\n' if base_text.strip() and extra_text else '') + extra_text,
         'editor_metadata': metadata,
     }
     heading = variant.critic_metadata.get('heading')
     if heading is not None and apply_heading:
         try:
             changes.update(GeneratedHeading.model_validate(heading).model_dump())
+            metadata['applied_variant']['heading'] = {key: changes[key] for key in current_heading}
         except PydanticValidationError as error:
             raise ValidationError({'heading': 'Wariant ma nieprawidłowy nagłówek.'}) from error
     return changes

@@ -78,7 +78,11 @@ class GenerationTests(ApiTestCase):
         self.assertEqual(prompt.generation_parameters['temperature'], 0.7)
         self.assertEqual(prompt.model_name, 'Bielik 11B')
         self.assertFalse(GenerationRun.objects.filter(request=prompt).exists())
-        self.assertEqual(self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['items'][0]['id'], prompt.pk)
+        for status in ('running', 'failed', 'cancelled'):
+            request = SceneGenerationRequest.objects.create(scene=self.scene, user_prompt=status)
+            GenerationRun.objects.create(request=request, status=status)
+        self.assertEqual([item['id'] for item in self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['items']],
+                         [self.prompt.pk])
         self.assertEqual(self.send('get', f'/scenes/{self.next_scene.pk}/prompts').json()['count'], 0)
         self.assert_status(self.send('get', f'/prompts/{prompt.pk}'), 200)
         self.assert_status(self.send('get', f'/prompts/{prompt.pk}/run'), 404)
@@ -133,6 +137,29 @@ class GenerationTests(ApiTestCase):
         self.assertEqual(self.scene.editor_metadata['blocks'][0]['text'], self.next_variant.generated_full_text)
         self.assertEqual(self.scene.editor_metadata['zoom'], 120)
         self.assertEqual(SceneVariant.objects.filter(scene=self.scene, is_selected=True).count(), 1)
+
+    def test_switching_variants_replaces_only_the_active_blocks_and_reapplication_is_a_noop(self):
+        self.scene.content_text = 'Tekst autora.'
+        self.scene.save()
+        def apply(variant):
+            return self.assert_status(self.send('post', f'/variants/{variant.pk}/select', {
+                'apply_to_scene': True,
+            }), 200).json()['applied_scene']
+
+        first = apply(self.variant)
+        self.assertIsNone(apply(self.variant))
+        manual = {'id': 'author-end', 'type': 'action', 'text': 'Dopisek autora.'}
+        metadata = first['editor_metadata']
+        metadata['blocks'].append(manual)
+        self.assert_status(self.send('patch', f'/scenes/{self.scene.pk}', {
+            'editor_metadata': metadata, 'content_text': first['content_text'] + '\n\n' + manual['text'],
+        }), 200)
+        second = apply(self.next_variant)
+        self.assertEqual(second['content_text'], f'Tekst autora.\n\n{self.next_variant.generated_full_text}\n\nDopisek autora.')
+        self.assertEqual(second['editor_metadata']['blocks'][-1], manual)
+        self.assertIsNone(apply(self.next_variant))
+        self.assertEqual(apply(self.variant)['content_text'],
+                         f'Tekst autora.\n\n{self.variant.generated_full_text}\n\nDopisek autora.')
 
     def test_statistics_are_scoped_to_the_current_user(self):
         stats = self.assert_status(self.send('get', '/users/me/statistics'), 200).json()

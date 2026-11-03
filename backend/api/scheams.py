@@ -329,6 +329,10 @@ class VariantOut(Schema):
     created_at: datetime
 
 
+class SelectedVariantOut(VariantOut):
+    applied_scene: SceneOut | None = None
+
+
 class SelectVariantIn(InputSchema):
     apply_to_scene: bool = False
 

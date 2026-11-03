@@ -263,15 +263,12 @@ when applicable, uses `critic_metadata.heading`. This reuses the existing JSON f
 adding critic scores or database columns. `backend/api/screenplay.py` handles
 validation and conversion; the output schemas live in `scheams.py`.
 The assistant and preview dialog format these blocks like the manual screenplay.
-Applying a variant appends its blocks to `scene.editor_metadata.blocks` and its
-text to `content_text`, preserving the existing text, block IDs, context and editor
-metadata, including edits made after generation. Applied variant IDs are recorded
-in `editor_metadata.applied_variant_ids`, so applying the same variant again does
-not append it twice. A proposed heading is saved only if the scene is still empty
-and has no heading; user-entered headings are preserved. Malformed stored blocks
-are rejected before changing the scene. Older text-only variants are appended as
-plain action text, with an exact copied prefix removed using their saved scene
-snapshot; they are not retroactively classified into screenplay paragraphs.
+Applying a variant inserts its blocks in the scene and records their IDs in
+`editor_metadata.applied_variant`. Applying another variant replaces those blocks
+in place and preserves surrounding author edits. Reapplying the active variant
+leaves the insertion as-is. The editor records each application as one undoable
+change, including any heading supplied by the variant. Older text-only variants
+are inserted as plain action text.
 
 The assistant shows "Generowanie...", then lists the variants with individual previews. It refreshes
 history/variants and ignores late responses after a scene switch. Failed requests
@@ -347,10 +344,11 @@ to the ERD; moving a project to trash does not delete any records.
 Prompt creation accepts `user_prompt` and optional `generation_parameters`
 (`temperature`, `max_tokens`). The server fixes the model to Bielik 11B and
 captures project/act/scene/cast/preferences in `context_snapshot`. Without explicit
-parameters it uses the user's preferences. Prompt history is immutable and scoped
-to a scene. The `/prompts` endpoint only saves the request; use `/scenes/{id}/generate`
-to perform a real generation and create its run/variant. A saved prompt without a
-run returns 404 at `/prompts/{id}/run`.
+parameters it uses the user's preferences. The scene prompt history lists requests
+whose generation run completed successfully. The `POST /prompts` endpoint saves
+a request record. Use `/scenes/{id}/generate` to perform a real generation and
+create its run and variants. A saved request without a run returns 404 at
+`/prompts/{id}/run`.
 Runs, agent executions and generated variants are server-managed read-only data.
 Existing seeded examples are available through their GET endpoints.
 Select a variant with `{ "apply_to_scene": false }` or explicitly apply its text

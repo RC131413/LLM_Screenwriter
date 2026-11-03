@@ -27,7 +27,7 @@ describe('application → hooks → API client → HTTP', () => {
           ...workspace.scenes[0].editor_metadata,
           blocks: [...(Array.isArray(currentBlocks) ? currentBlocks : []), ...(Array.isArray(continuation) ? continuation : [])],
         };
-        return jsonResponse({ ...variant, is_selected: true });
+        return jsonResponse({ ...variant, is_selected: true, applied_scene: workspace.scenes[0] });
       }
       if (call.path === '/scenes/20/variants') return jsonResponse({ items: generated ? [variantFixture()] : [], count: generated ? 1 : 0 });
       if (['/scenes/20/prompts', '/scenes/20/runs'].includes(call.path)) return jsonResponse({ items: [], count: 0 });

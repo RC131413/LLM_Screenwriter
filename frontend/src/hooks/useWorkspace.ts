@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import type { CreateProjectInput, ProjectAction } from '../services/api';
-import { allPages, errorMessage, scenePayload, toProject } from '../services/workspaceData';
+import { allPages, errorMessage, scenePayload, toProject, toScene } from '../services/workspaceData';
 import type { Act, Character, Project, Scene } from '../types';
 
 export function useWorkspace(userId?: number) {
@@ -227,10 +227,21 @@ export function useWorkspace(userId?: number) {
       await api.characters.delete(Number(characterId)); await reloadProject(projectId);
     }),
     applyVariant: (projectId: string, variantId: number) => mutate(async () => {
-      await api.variants.select(variantId, { apply_to_scene: true });
-      const project = await reloadProject(projectId);
-      for (const scene of project.scenes) { past.current.delete(scene.id); future.current.delete(scene.id); }
-      return project;
+      const generation = epoch.current;
+      const { applied_scene: saved } = await api.variants.select(variantId, { apply_to_scene: true });
+      if (!saved || generation !== epoch.current) return false;
+      const project = projectById(projectId);
+      const previous = project.scenes.find(scene => scene.id === String(saved.id));
+      if (!previous) return false;
+      const act = project.acts.find(item => item.id === String(saved.act_id));
+      const updated = toScene(saved, act?.act_number ?? previous.act);
+      past.current.set(previous.id, [...(past.current.get(previous.id) ?? []), previous].slice(-50));
+      future.current.delete(previous.id);
+      replace(current.current.map(item => item.id === projectId
+        ? { ...item, scenes: item.scenes.map(scene => scene.id === updated.id ? updated : scene) }
+        : item));
+      setHistoryVersion(value => value + 1);
+      return true;
     }),
   };
 }

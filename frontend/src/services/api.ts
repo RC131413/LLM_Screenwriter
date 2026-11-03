@@ -502,7 +502,7 @@ export const variantsApi = {
     apiRequest<Page<ApiSceneVariant>>(`runs/${id(runId)}/variants`, { ...options, query: { ...params } }),
   get: (variantId: ApiId, options: CallOptions = {}) => apiRequest<ApiSceneVariant>(`variants/${id(variantId)}`, options),
   select: (variantId: ApiId, data: SelectVariantInput = {}, options: CallOptions = {}) =>
-    apiRequest<ApiSceneVariant>(`variants/${id(variantId)}/select`, { ...options, method: 'POST', body: data }),
+    apiRequest<ApiSceneVariant & { applied_scene: ApiScene | null }>(`variants/${id(variantId)}/select`, { ...options, method: 'POST', body: data }),
 };
 
 export const api = {

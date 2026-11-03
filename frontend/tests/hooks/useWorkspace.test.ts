@@ -248,11 +248,11 @@ describe('structure, characters and generated variants', () => {
     expect(result.current.projects[0].characters[0].backstory).toBe('Nowa historia');
   });
 
-  it('applies a stored variant through the select endpoint and reloads the actual text', async () => {
+  it('applies a stored variant as one undoable change and persists undo and redo', async () => {
     const http = workspaceHttp((call, workspace: ApiWorkspace) => {
       if (call.path === '/variants/70/select') {
         workspace.scenes[0].content_text = 'Tekst wariantu'; workspace.scenes[0].editor_metadata = {};
-        return jsonResponse({ id: 70, is_selected: true });
+        return jsonResponse({ id: 70, is_selected: true, applied_scene: workspace.scenes[0] });
       }
       return undefined;
     });
@@ -260,6 +260,12 @@ describe('structure, characters and generated variants', () => {
     await act(async () => { await result.current.applyVariant('1', 70); });
     expect(http.calls.find(call => call.path === '/variants/70/select')?.body).toEqual({ apply_to_scene: true });
     expect(result.current.projects[0].scenes[0].blocks[0].text).toBe('Tekst wariantu');
-    expect(result.current.canUndo('20')).toBe(false);
+    expect(result.current.canUndo('20')).toBe(true);
+    act(() => result.current.undo('20'));
+    await act(async () => { await result.current.flush(); });
+    expect(http.workspace.scenes[0].content_text).toBe('ANNA czyta list.');
+    act(() => result.current.redo('20'));
+    await act(async () => { await result.current.flush(); });
+    expect(http.workspace.scenes[0].content_text).toBe('Tekst wariantu');
   });
 });

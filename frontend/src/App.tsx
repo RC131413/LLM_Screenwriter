@@ -90,7 +90,7 @@ export default function App() {
         {sidebarOpen && <><button className="sidebar-backdrop" aria-label="Zamknij listę scen" onClick={() => setSidebarOpen(false)} /><SceneSidebar key={project.id} project={project} sceneId={scene?.id} onSelect={selectScene} onClose={() => setSidebarOpen(false)} /></>}
         <main className="main-workspace">
           <div className="workspace-nav"><div className="workspace-tabs" role="tablist" aria-label="Widoki projektu">{tabs.map(tab => <button key={tab.id} role="tab" id={`view-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={view === tab.id} onClick={() => setView(tab.id)}><tab.icon size={15} />{tab.label}{tab.id === 'characters' && <span className="tab-count">{project.characters.length}</span>}</button>)}</div><span className="document-version">Wersja robocza</span></div>
-          <div className="workspace-content" id="workspace-content" role="tabpanel" aria-labelledby={`view-tab-${view}`}>
+          <div className="workspace-content" id="workspace-content" role="tabpanel" aria-labelledby={`view-tab-${view}`} inert={workspace.mutating}>
             {view === 'script' ? scene ? <SceneEditor key={scene.id} scene={scene} sceneNumber={scene.scene_number} zoom={zoom} onChange={workspace.updateScene} onDelete={() => setModal('deleteScene')} undo={() => workspace.undo(scene.id)} redo={() => workspace.redo(scene.id)} canUndo={workspace.canUndo(scene.id)} canRedo={workspace.canRedo(scene.id)} /> : <div className="empty-view"><Clapperboard size={30} strokeWidth={1.4} /><h2>Pierwsza scena</h2><button className="button" onClick={() => setView('outline')}><LayoutList size={15} />Otwórz strukturę</button></div> : view === 'outline' ? <OutlineView project={project} onSelect={selectScene}
               onAdd={async act => { const id = await workspace.addScene(project.id, act); selectScene(id); }} onAddAct={() => workspace.addAct(project.id)}
               onSaveAct={act => workspace.editAct(project.id, act)} onRemoveAct={act => workspace.removeAct(project.id, act)}
@@ -98,8 +98,8 @@ export default function App() {
               <CharactersView key={project.id} project={project} onSave={character => workspace.saveCharacter(project.id, character)} onDelete={id => workspace.removeCharacter(project.id, id)} />}
           </div>
         </main>
-        {assistantOpen && <AssistantPanel key={project.id} project={project} scene={scene} onSelect={selectScene} onChange={workspace.updateScene} onClose={() => setAssistantOpen(false)} onPrepare={workspace.flush}
-          onApply={async variantId => { await workspace.applyVariant(project.id, variantId); setNotice('Wariant dopisany do sceny.'); }} />}
+        {assistantOpen && <AssistantPanel key={project.id} project={project} scene={scene} onSelect={selectScene} onChange={next => { if (!workspace.mutating) workspace.updateScene(next); }} onClose={() => setAssistantOpen(false)} onPrepare={workspace.flush}
+          onApply={async variantId => { const changed = await workspace.applyVariant(project.id, variantId); setNotice(changed ? 'Wariant zastosowany.' : 'Wariant jest już zastosowany.'); }} />}
       </div>
     </> : <ProjectDashboard profile={profile} onAccountSettings={() => navigation.openSettings()} onLogout={logout} projects={workspace.projects} collection={dashboardCollection} onCollection={setDashboardCollection} onOpen={switchProject} onCreate={() => setModal('project')} onEdit={editProject} onDelete={setDeletingProjectId}
       onFavorite={id => void perform(() => workspace.projectAction(id, workspace.projects.find(item => item.id === id)?.metadata?.is_favorite ? 'unfavorite' : 'favorite'))}

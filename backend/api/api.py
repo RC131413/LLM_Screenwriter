@@ -431,7 +431,7 @@ def delete_cast_member(request, cast_id: s.PositiveId):
 @api.get('/scenes/{scene_id}/prompts', response=list[s.PromptOut], tags=['Prompt history'])
 @paginate
 def list_prompts(request, scene_id: s.PositiveId):
-    return get_owned(Scene, request.auth, scene_id).generation_requests.all()
+    return get_owned(Scene, request.auth, scene_id).generation_requests.filter(run__status='completed')
 
 
 @api.post('/scenes/{scene_id}/prompts', response={201: s.PromptOut}, tags=['Prompt history'])
@@ -631,7 +631,7 @@ def get_variant(request, variant_id: s.PositiveId):
     return get_owned(SceneVariant, request.auth, variant_id)
 
 
-@api.post('/variants/{variant_id}/select', response=s.VariantOut, tags=['Variants'])
+@api.post('/variants/{variant_id}/select', response=s.SelectedVariantOut, tags=['Variants'])
 @transaction.atomic
 def select_variant(request, variant_id: s.PositiveId, payload: s.SelectVariantIn):
     variant = get_owned(SceneVariant, request.auth, variant_id)
@@ -645,5 +645,5 @@ def select_variant(request, variant_id: s.PositiveId, payload: s.SelectVariantIn
         scene = Scene.objects.get(pk=variant.scene_id)
         changes = append_variant(scene, variant)
         if changes is not None:
-            save_validated(scene, changes)
+            variant.applied_scene = save_validated(scene, changes)
     return variant

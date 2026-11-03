@@ -41,7 +41,7 @@ describe('assistant using stored backend data', () => {
     await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się potwierdzić anulowania');
     expect(screen.queryByText('Generowanie anulowane. Nie zapisano wariantu.')).not.toBeInTheDocument();
-    await act(async () => { generation.resolve(jsonResponse(variantFixture(), 201)); });
+    await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
     expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
@@ -68,12 +68,12 @@ describe('assistant using stored backend data', () => {
     expect(screen.getByRole('button', { name: 'Anulowanie...' })).toBeDisabled();
     const request = http.calls.find(call => call.path === '/scenes/20/generate')!;
     const abort = http.calls.find(call => call.path === '/scenes/20/cancel-generation')!;
-    expect(abort.body).toEqual(request.body);
+    expect(request.body).toEqual({ ...(abort.body as object), variant_count: 1 });
     expect(abort.headers.get('X-CSRFToken')).toBe('test-csrf');
     await act(async () => { cancellation.resolve(jsonResponse({ detail: 'Anulowano' })); });
     expect(await screen.findByText('Generowanie anulowane. Nie zapisano wariantu.')).toBeInTheDocument();
     expect(request.init.signal?.aborted).toBe(true);
-    await act(async () => { generation.resolve(jsonResponse(variantFixture(), 201)); });
+    await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
     expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generuj scenę' })).toBeEnabled();
     expect(screen.getByLabelText('Kierunek sceny')).toHaveValue('Nowy kierunek');
@@ -103,20 +103,21 @@ describe('assistant using stored backend data', () => {
     await user.type(screen.getByLabelText('Kierunek sceny'), 'Test');
     await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
     await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
-    await act(async () => { generation.resolve(jsonResponse(variantFixture(), 201)); });
+    await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
     expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();
     await act(async () => { cancellation.resolve(jsonResponse({ detail: 'Anulowano' })); });
     expect(await screen.findByText('Generowanie anulowane. Nie zapisano wariantu.')).toBeInTheDocument();
   });
 
-  it('shows only the latest generated variant after generation, refresh and remount', async () => {
+  it('keeps all variants from the latest batch after generation, refresh and remount', async () => {
     const older = { ...variantFixture(20, 69), run_id: 59, title: 'Poprzedni wariant', is_selected: true };
     const newest = { ...variantFixture(), title: 'Najnowszy wariant' };
+    const second = { ...variantFixture(20, 71), variant_number: 2, title: 'Drugi wariant' };
     let generated = false;
     const http = interceptHttp(call => {
-      if (call.path === '/scenes/20/generate') { generated = true; return jsonResponse(newest, 201); }
+      if (call.path === '/scenes/20/generate') { generated = true; return jsonResponse([newest, second], 201); }
       if (call.path === '/scenes/20/variants') {
-        const all = generated ? [newest, older] : [older];
+        const all = generated ? [second, newest, older] : [older];
         const limit = Number(call.url.searchParams.get('limit') ?? 20);
         const offset = Number(call.url.searchParams.get('offset') ?? 0);
         return jsonResponse({ items: all.slice(offset, offset + limit), count: all.length });
@@ -128,11 +129,12 @@ describe('assistant using stored backend data', () => {
     const user = userEvent.setup();
     expect(await screen.findByText('Poprzedni wariant')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Kierunek sceny'), 'Zmień scenę');
+    await user.click(screen.getByRole('button', { name: '2' }));
     await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
     expect(await screen.findByText('Najnowszy wariant')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Odśwież warianty i przebieg' })).toBeEnabled());
     expect(screen.queryByText('Poprzedni wariant')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('radio')).toHaveLength(1);
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
     const reads = http.calls.filter(call => call.path === '/scenes/20/variants').length;
     await user.click(screen.getByRole('button', { name: 'Odśwież warianty i przebieg' }));
     await waitFor(() => expect(http.calls.filter(call => call.path === '/scenes/20/variants').length).toBeGreaterThan(reads));
@@ -142,9 +144,10 @@ describe('assistant using stored backend data', () => {
     render(<AssistantPanel {...component} />);
     expect(await screen.findByText('Najnowszy wariant')).toBeInTheDocument();
     expect(screen.queryByText('Poprzedni wariant')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('radio')).toHaveLength(1);
-    expect(http.calls.filter(call => call.path === '/scenes/20/variants').every(call => call.url.searchParams.get('limit') === '1')).toBe(true);
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(http.calls.filter(call => call.path === '/scenes/20/variants').every(call => call.url.searchParams.get('limit') === '3')).toBe(true);
     expect(http.calls.filter(call => call.method !== 'GET').map(call => call.path)).toEqual(['/scenes/20/generate']);
+    expect(http.calls.find(call => call.method === 'POST')?.body).toMatchObject({ variant_count: 2 });
   });
 
   it('loads history for the current scene and inserts the selected prompt into the input', async () => {
@@ -184,7 +187,7 @@ describe('assistant using stored backend data', () => {
     const readsBeforeRefresh = http.calls.filter(call => call.method === 'GET').length;
     const refresh = screen.getByRole('button', { name: 'Odśwież warianty i przebieg' });
     expect(refresh).toBeDisabled();
-    expect(refresh).toHaveAttribute('title', 'Pobierz ponownie ostatni zapisany wariant i status. Nie zatrzymuje generowania.');
+    expect(refresh).toHaveAttribute('title', 'Pobierz ponownie ostatnią serię wariantów i status.');
     await user.click(refresh);
     expect(http.calls.filter(call => call.method === 'GET')).toHaveLength(readsBeforeRefresh);
     expect(http.calls.find(call => call.path === '/scenes/20/generate')?.init.signal?.aborted).toBe(false);
@@ -192,10 +195,10 @@ describe('assistant using stored backend data', () => {
     expect(http.calls.filter(call => call.method === 'POST')).toHaveLength(1);
     expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();
     generated = true;
-    await act(async () => { generation.resolve(jsonResponse(variantFixture(), 201)); });
-    expect(await screen.findByRole('region', { name: 'Wynik generowania' })).toHaveTextContent('Znalazłam list.');
+    await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
+    expect(await screen.findByRole('radio', { name: 'Wariant Bielika' })).toBeChecked();
     expect(http.calls.filter(call => call.method !== 'GET').map(call => [call.path, call.body])).toEqual([
-      ['/scenes/20/generate', { user_prompt: 'Więcej napięcia', generation_id: expect.any(String) }],
+      ['/scenes/20/generate', { user_prompt: 'Więcej napięcia', generation_id: expect.any(String), variant_count: 1 }],
     ]);
     expect(http.calls.find(call => call.method === 'POST')?.headers.get('X-CSRFToken')).toBe('test-csrf');
     expect(screen.getByRole('button', { name: 'Generuj scenę' })).toBeEnabled();
@@ -240,7 +243,7 @@ describe('assistant using stored backend data', () => {
     await waitFor(() => expect(http.calls.some(call => call.method === 'POST')).toBe(true));
     rerender(<AssistantPanel {...component} scene={{ ...component.scene, id: '21', title: 'Druga scena' }} />);
     expect(http.calls.find(call => call.method === 'POST')?.init.signal?.aborted).toBe(true);
-    await act(async () => { generation.resolve(jsonResponse(variantFixture(), 201)); });
+    await act(async () => { generation.resolve(jsonResponse([variantFixture()], 201)); });
     expect(screen.getByLabelText('Kierunek sceny')).toHaveValue('');
     expect(screen.queryByText('Znalazłam list.')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Wynik generowania' })).not.toBeInTheDocument();

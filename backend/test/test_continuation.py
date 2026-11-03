@@ -15,6 +15,24 @@ NEW_BLOCKS = [{'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None, 'spok
 
 
 class ContinuationFormatTests(SimpleTestCase):
+    def test_removes_copied_action_when_model_omits_interleaved_dialogue(self):
+        previous = [
+            {'id': '1', 'type': 'action', 'text': 'Anna otwiera kopertę.'},
+            {'id': '2', 'type': 'character', 'text': 'ANNA'},
+            {'id': '3', 'type': 'dialogue', 'text': 'Znalazłam list.'},
+            {'id': '4', 'type': 'action', 'text': 'Anna odkłada list na stół.'},
+            {'id': '5', 'type': 'character', 'text': 'JAN'},
+            {'id': '6', 'type': 'dialogue', 'text': 'Pokaż mi.'},
+        ]
+        scene = {'content_text': '\n\n'.join(block['text'] for block in previous),
+                 'editor_metadata': {'blocks': previous}}
+        answer = json.dumps({'blocks': [
+            {'type': 'action', 'text': 'Anna otwiera kopertę.'},
+            {'type': 'action', 'text': 'Anna odkłada list na stół. Jan wyciąga rękę.'},
+        ]})
+        blocks, _ = generated_continuation(answer, scene)
+        self.assertEqual([block['text'] for block in blocks], ['Jan wyciąga rękę.'])
+
     def test_heading_is_allowed_only_for_empty_scene_without_any_heading(self):
         for scene, allowed in (
             ({'content_text': '', 'location_heading': '', 'time_of_day': ''}, True),

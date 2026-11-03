@@ -614,7 +614,7 @@ body > #root > .request-state { min-height: 100vh; }
 .request-state p { max-width: 580px; overflow-wrap: anywhere; }
 .variant-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 12pt 'Courier New', monospace; }
 .generation-message { margin-top: 10px; color: var(--muted); }
-.generated-scene-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow-y: auto; margin: 0; padding: 12px; background: #f7f8f8; border: 1px solid var(--border); border-radius: 3px; font: 12px/1.7 'Courier New', Courier, monospace; }
+.variant-count-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 12px; }
 .screenplay-preview { white-space: normal; font: 12pt/1.65 'Courier New', Courier, monospace; }
 .screenplay-preview-heading { font-weight: 700; text-transform: uppercase; white-space: pre-wrap; margin: 0 0 22px; }
 .screenplay-preview .screenplay-preview-block { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 18px; }

@@ -16,7 +16,7 @@ describe('application → hooks → API client → HTTP', () => {
       if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
       if (call.path === '/scenes/20/generate') {
         sourceText = workspace.scenes[0].content_text; generated = true;
-        return jsonResponse(variantFixture(), 201);
+        return jsonResponse([variantFixture()], 201);
       }
       if (call.path === '/variants/70/select') {
         const variant = variantFixture();
@@ -39,11 +39,14 @@ describe('application → hooks → API client → HTTP', () => {
     fireEvent.change(await screen.findByLabelText('Akcja 1'), { target: { value: 'Najnowszy tekst sceny.' } });
     await user.type(screen.getByLabelText('Kierunek sceny'), 'Dodaj dialog');
     await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
-    expect(await screen.findByRole('region', { name: 'Wynik generowania' })).toHaveTextContent('Znalazłam list.');
+    expect(await screen.findByRole('radio', { name: 'Wariant Bielika' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Podgląd tekstu' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Znalazłam list.');
+    await user.click(screen.getByRole('button', { name: 'Zamknij' }));
     expect(sourceText).toBe('Najnowszy tekst sceny.');
     const writes = http.calls.filter(call => call.path === '/scenes/20' || call.path === '/scenes/20/generate');
     expect(writes.map(call => [call.method, call.path])).toEqual([['PATCH', '/scenes/20'], ['POST', '/scenes/20/generate']]);
-    expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog', generation_id: expect.any(String) });
+    expect(writes[1].body).toEqual({ user_prompt: 'Dodaj dialog', generation_id: expect.any(String), variant_count: 1 });
     expect(screen.getByLabelText('Akcja 1')).toHaveValue('Najnowszy tekst sceny.');
     await user.click(screen.getByRole('button', { name: 'Zastosuj wybrany wariant' }));
     expect(await screen.findByLabelText('Postać 2')).toHaveValue('ANNA');

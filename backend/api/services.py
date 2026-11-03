@@ -67,7 +67,9 @@ def scene_generation_prompt(prompt):
         if style.get('parentheticals') == 'ignore' else
         'Używaj krótkich, konkretnych didaskaliów w nawiasach tam, gdzie pomagają zagrać kwestię: '
         'dla intencji, pauzy albo zmiany sposobu mówienia wynikającej z sytuacji. Zwykle 1–4 słowa. '
-        'Przeplataj tak oznaczone kwestie ze zwykłymi wypowiedziami; null oznacza brak potrzeby wskazówki, nie zakaz jej użycia. '
+        'W polu parenthetical wpisz samą wskazówkę, np. „po krótkiej pauzie”, bez imienia postaci i pełnego zdania. '
+        'W dłuższej rozmowie poszukaj jednego ważnego momentu dla krótkiej wskazówki, np. pauzy przed wyznaniem lub półgłosu przy zdradzaniu sekretu. '
+        'Pozostałe kwestie zwykle zostaw bez wskazówek. '
         'Nie dopisuj didaskaliów mechanicznie do każdej kwestii ani nie wymyślaj ich wbrew kontekstowi. '
         'Samotność postaci nie jest powodem do określania sposobu mówienia ani adresata. '
         'Ustalony sposób mówienia utrzymuje się w kolejnych kwestiach; oznacz dopiero jego istotną zmianę. '
@@ -79,6 +81,7 @@ def scene_generation_prompt(prompt):
         'Nie dopisuj samotnej postaci monologu tylko po to, żeby powstał dialog. '
         'Zrób jeden konkretny krok w stronę celu: drobne odkrycie, przeszkodę lub decyzję wynikającą z sytuacji. '
         'Każdy akapit rozwija ten krok; zastępuj powtarzane pytania i gesty nowym działaniem. '
+        'Każde nowe działanie zapisz w osobnym krótkim bloku action. Jeśli postacie rozmawiają, podaj ich rzeczywiste słowa w speech zamiast streszczać rozmowę w action. '
         'Pisz wyłącznie to, co kamera widzi lub mikrofon słyszy; emocje wyrażaj zachowaniem. '
         'Zachowaj ustalone fakty, stan wiedzy bohatera i dokładne imiona. '
         'Jedna scena ma jedno miejsce i porę dnia. Zakończ fragment przed przejściem z wnętrza w plener lub odwrotnie. '
@@ -109,7 +112,8 @@ def scene_generation_prompt(prompt):
         f'INSTRUKCJA UŻYTKOWNIKA:\n{prompt.user_prompt}\n\n'
         f'KONTROLA PRZED ZWROTEM:\nMiejsce: {setting}\n'
         f'Pora dnia: {scene.get("time_of_day") or "zgodna z nagłówkiem"}. '
-        'Akcja jest obserwowalna, wypowiedzi opcjonalne, każda wnosi coś nowego. '
+        'Zacznij od nowego zdarzenia po końcu zapisanej sceny. Nie kopiuj wcześniejszych akapitów, także po pominięciu dialogów. '
+        'Rozdziel działania i wypowiedzi na krótkie bloki; action ma najwyżej 600 znaków. '
         'Zachowaj pomocne parenthetical, usuń jedynie zbędne i powtórzone wskazówki. '
         'Zwróć wyłącznie JSON; nie wypisuj tej kontroli w blocks.'
     )

@@ -281,6 +281,7 @@ class PromptIn(InputSchema):
 
 class GenerateSceneIn(PromptIn):
     generation_id: UUID | None = None
+    variant_count: Annotated[int, Field(strict=True, ge=1, le=3)] | None = None
 
 
 class CancelGenerationIn(PromptIn):

@@ -10,6 +10,10 @@ from backend.ollama import OllamaError
 from .scheams import EditorBlock, GeneratedHeading, GeneratedScene, GeneratedSceneWithHeading
 
 
+class UnstructuredActionError(OllamaError):
+    """The model put a long passage into one action block."""
+
+
 def _parse_generation(answer, allow_heading=False):
     try:
         schema = GeneratedSceneWithHeading if allow_heading else GeneratedScene
@@ -121,17 +125,32 @@ def refine_parentheticals(blocks, existing_blocks, policy):
             if key:
                 last_direction[speaker] = key
     result = []
+    recovered_speakers = set()
     for block in blocks:
         if block['type'] == 'character':
             speaker = ' '.join(block['text'].casefold().split())
         elif block['type'] in {'action', 'transition'}:
             speaker = None
         if block['type'] == 'parenthetical':
-            direction, key = _direction_details(block['text'])
-            if not key or (speaker and last_direction.get(speaker) == key):
+            raw = block['text'].strip().strip('()').strip()
+            named_direction = speaker and raw.casefold().startswith(speaker + ' ')
+            if named_direction:
+                # A prose sentence about the speaker is not an acting cue.
+                # Recover at most one short delivery hint per speaker.
+                match = re.fullmatch(
+                    re.escape(speaker) + r'\s+(?:mówi|odpowiada|pyta|dodaje)\s+([^.!?]+)[.!?]?',
+                    raw, flags=re.IGNORECASE,
+                )
+                if not match or speaker in recovered_speakers:
+                    continue
+                raw = match[1]
+            direction, key = _direction_details(raw)
+            if not key or len(key.split()) > 5 or (speaker and last_direction.get(speaker) == key):
                 continue
             if speaker:
                 last_direction[speaker] = key
+            if named_direction:
+                recovered_speakers.add(speaker)
             block = {**block, 'text': f'({direction})'}
         result.append(block)
     return result
@@ -191,13 +210,21 @@ def generated_continuation(answer, scene, *, parentheticals='sparingly'):
     })
     if not blocks:
         raise OllamaError('Model zwrócił sam nagłówek bez treści sceny. Spróbuj ponownie.')
+    if any(block['type'] == 'action' and len(block['text']) > 600 for block in blocks):
+        raise UnstructuredActionError('Model zwrócił zbyt długi blok akcji. Skróć polecenie do jednego fragmentu sceny.')
+    previous_blocks = existing_scene_blocks(scene)
     original = scene.get('content_text', '')
     if not original.strip():
-        original = blocks_text(existing_scene_blocks(scene))
+        original = blocks_text(previous_blocks)
     blocks = remove_repeated_prefix(original, blocks)
+    # The model sometimes copies only action, skipping dialogue between paragraphs.
+    first_non_action = next((i for i, block in enumerate(blocks) if block['type'] != 'action'), len(blocks))
+    previous_action = blocks_text([block for block in previous_blocks if block['type'] == 'action'])
+    if previous_action.strip() != original.strip():
+        blocks = remove_repeated_prefix(previous_action, blocks[:first_non_action]) + blocks[first_non_action:]
     if not blocks:
         raise OllamaError('Model powtórzył wyłącznie istniejącą treść. Spróbuj ponownie wygenerować dalszy ciąg.')
-    blocks = refine_parentheticals(blocks, existing_scene_blocks(scene), parentheticals)
+    blocks = refine_parentheticals(blocks, previous_blocks, parentheticals)
     return blocks, heading
 
 

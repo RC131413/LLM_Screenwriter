@@ -25,7 +25,7 @@ from ninja.utils import check_csrf
 from backend import ollama
 
 from . import scheams as s
-from .screenplay import append_variant, blocks_text, generated_continuation, scene_output_schema
+from .screenplay import UnstructuredActionError, append_variant, blocks_text, generated_continuation, scene_output_schema
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
@@ -461,9 +461,9 @@ def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', syste
 
 
 @api.post('/scenes/{scene_id}/generate',
-          response={201: s.VariantOut, 409: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
+          response={201: list[s.VariantOut] | s.VariantOut, 409: s.MessageOut, 502: s.MessageOut, 503: s.MessageOut, 504: s.MessageOut}, tags=['LLM'])
 def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, response: HttpResponse):
-    """Generate one structured variant; dialogue is optional."""
+    """Generate a batch sequentially, then persist it atomically."""
     response['Cache-Control'] = 'no-store'
     if not payload.user_prompt.strip():
         raise ValidationError({'user_prompt': 'Wpisz instrukcję dla modelu.'})
@@ -473,26 +473,50 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
     prompt = run.request
     started = perf_counter()
     # No database transaction or row lock is held during the slow HTTP request.
+    scene = prompt.context_snapshot['scene']
+    model_prompt = scene_generation_prompt(prompt)
+    output_schema = scene_output_schema(scene)
+    parentheticals = prompt.context_snapshot.get('writing_style_preferences', {}).get('parentheticals', 'sparingly')
+    results = []
     try:
-        current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
-        if current_status is None:
-            raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
-        if current_status == 'cancelled':
-            raise ollama.OllamaCancelled()
-        answer = ollama.generate(
-            scene_generation_prompt(prompt), output_schema=scene_output_schema(prompt.context_snapshot['scene']),
-            is_cancelled=lambda: generation_is_cancelled(run.pk),
-            **prompt.generation_parameters,
-        )
-        current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
-        if current_status is None:
-            raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
-        if current_status == 'cancelled':
-            raise ollama.OllamaCancelled()
-        blocks, heading = generated_continuation(
-            answer, prompt.context_snapshot['scene'],
-            parentheticals=prompt.context_snapshot.get('writing_style_preferences', {}).get('parentheticals', 'sparingly'),
-        )
+        for number in range(1, (payload.variant_count or 1) + 1):
+            variant_prompt = model_prompt
+            if number > 1:
+                variant_prompt += (
+                    '\n\nPODEJŚCIE WARIANTU: Jeśli sytuacja obejmuje spotkanie lub rozmowę, '
+                    'pokaż krótką wymianę kwestii w osobnych blokach speech. Przy ważnej kwestii '
+                    'dodaj trafną wskazówkę aktorską, jeśli ustawienia na to pozwalają. '
+                    'Uszanuj polecenie autora, jeśli prosi o scenę niemą.'
+                )
+            for attempt in range(2):
+                current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
+                if current_status is None:
+                    raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
+                if current_status == 'cancelled':
+                    raise ollama.OllamaCancelled()
+                answer = ollama.generate(
+                    variant_prompt, output_schema=output_schema,
+                    is_cancelled=lambda: generation_is_cancelled(run.pk),
+                    **prompt.generation_parameters,
+                )
+                current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
+                if current_status is None:
+                    raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
+                if current_status == 'cancelled':
+                    raise ollama.OllamaCancelled()
+                try:
+                    blocks, heading = generated_continuation(answer, scene, parentheticals=parentheticals)
+                except UnstructuredActionError:
+                    if attempt == 1:
+                        raise
+                    variant_prompt += (
+                        '\n\nPOPRAW FORMAT: Poprzednia odpowiedź skleiła wiele działań w jeden blok. '
+                        'Napisz od nowa tylko krótki dalszy fragment. Oddziel każde działanie '
+                        'i każdą wypowiedź. Nie streszczaj wcześniejszej sceny.'
+                    )
+                else:
+                    results.append((blocks, heading))
+                    break
     except ollama.OllamaError as error:
         finished = timezone.now()
         GenerationRun.objects.filter(pk=run.pk, status='running').update(
@@ -506,19 +530,20 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
         run = get_object_or_404(GenerationRun.objects.select_for_update(), pk=run.pk)
         if run.status == 'cancelled':
             return 409, {'detail': 'Generowanie zostało anulowane.'}
-        variant = save_validated(SceneVariant(
-            run=run, scene_id=prompt.scene_id, variant_number=1,
-            title='Wariant Bielika', generated_full_text=blocks_text(blocks),
+        variants = [save_validated(SceneVariant(
+            run=run, scene_id=prompt.scene_id, variant_number=number,
+            title=f'Wariant {number}' if payload.variant_count is not None else 'Wariant Bielika',
+            generated_full_text=blocks_text(blocks),
             critic_metadata={
                 'format': 'screenplay_blocks_v1', 'operation': 'append', 'blocks': blocks,
                 **({'heading': heading} if heading else {}),
             },
-        ))
+        )) for number, (blocks, heading) in enumerate(results, start=1)]
         save_validated(run, {
             'status': 'completed', 'finished_at': timezone.now(),
             'total_duration_ms': int((perf_counter() - started) * 1000),
         })
-    return 201, variant
+    return 201, variants if payload.variant_count is not None else variants[0]
 
 
 @transaction.atomic

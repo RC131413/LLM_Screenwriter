@@ -196,7 +196,7 @@ racing late responses, retains the prompt, and offers cancellation retry on a
 network failure. Cancelled runs do not display a variant, including after reload.
 Cancelling while the editor save is pending prevents the LLM request entirely.
 
-Each generation returns exactly one continuation as an ordered `blocks` array.
+Each variant contains one continuation as an ordered `blocks` array.
 The model's enforced schema accepts `action`, `speech` and `transition`.
 A `speech` groups `speaker`, nullable `parenthetical` and `spoken_text`; the backend
 expands it to the existing editor blocks in this order: `character`, optional
@@ -228,8 +228,14 @@ are removed. The proposed heading appears above the variant preview, separate
 from the blocks. Existing saved scenes and variants are not rewritten.
 Invalid or token-truncated output marks the run as failed without saving a variant.
 Dialogue is optional for every scene request. Action-only output is valid without
-special keywords and never triggers an extra model call. Generation makes one
-Ollama request and saves one validated variant; malformed JSON is still rejected.
+special keywords. The panel sends `variant_count` (1–3), and the backend calls
+Ollama sequentially with the same author prompt, scene snapshot and generation
+settings. Later variants encourage direct dialogue where the scene calls for
+conversation. An action block over 600 characters triggers one formatting retry
+for that variant before the batch can be saved.
+It saves the complete batch in one transaction and returns an array of variants.
+Requests without `variant_count` still return a single variant object.
+Cancellation or a generation failure discards the unfinished batch.
 The prompt asks for short, observable actions, natural dialogue only when useful,
 and sparing acting directions. New paragraphs should advance the scene goal with
 information, obstacles, discoveries or decisions rather than repeated questions,
@@ -264,13 +270,13 @@ are rejected before changing the scene. Older text-only variants are appended as
 plain action text, with an exact copied prefix removed using their saved scene
 snapshot; they are not retroactively classified into screenplay paragraphs.
 
-The assistant shows "Generowanie...", then the actual generated text. It refreshes
+The assistant shows "Generowanie...", then lists the variants with individual previews. It refreshes
 history/variants and ignores late responses after a scene switch. Failed requests
 retain the input for retry. The old `/api/llm/ping` endpoint has been removed.
-The saved-variants panel requests only the newest variant (`limit=1`) for the scene,
-including on page reload. A successful generation replaces the visible result;
+The saved-variants panel loads the latest batch for the scene, including on page
+reload. A successful generation replaces the visible batch;
 older variants remain in the database as history. The refresh button only reloads
-the latest saved variant and run status via GET requests. It does not cancel
+the latest saved batch and run status via GET requests. It does not cancel
 generation or return partial output and is disabled while generating.
 Responses have `Cache-Control: no-store`.
 Unavailable Ollama returns 503, a timeout 504, and a missing model or invalid

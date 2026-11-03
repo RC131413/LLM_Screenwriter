@@ -52,16 +52,18 @@ class GenerationCancellationTests(ApiTestCase):
         self.assertEqual(self.scene.content_text, '')
 
     @patch('backend.ollama.generate')
-    def test_cancellation_wins_a_race_with_the_final_token(self, generate):
+    def test_cancellation_during_the_second_variant_discards_the_batch(self, generate):
         payload = self.payload()
 
         def final_token(*args, **kwargs):
-            self.assert_status(self.cancel(payload), 200)
+            if generate.call_count == 2:
+                self.assert_status(self.cancel(payload), 200)
             return ANSWER
 
         generate.side_effect = final_token
         before = SceneVariant.objects.count()
-        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 409)
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {**payload, 'variant_count': 3}), 409)
+        self.assertEqual(generate.call_count, 2)
         self.assertEqual(SceneVariant.objects.count(), before)
 
     @patch('backend.ollama.generate', return_value=ANSWER)

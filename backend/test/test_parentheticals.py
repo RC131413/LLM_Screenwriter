@@ -33,6 +33,15 @@ REPEATED = answer(
 
 
 class ParentheticalFormatTests(SimpleTestCase):
+    def test_recovers_one_delivery_hint_from_narration_without_repeating_it_for_each_line(self):
+        blocks, _ = generated_continuation(answer(
+            speech('Dziadek uśmiecha się ciepło.', 'Usiądź.', speaker='DZIADEK'),
+            speech('Dziadek mówi spokojnie i z troską.', 'Znałem twojego ojca.', speaker='DZIADEK'),
+            speech('Dziadek mówi z nostalgią i miłością.', 'Zostawił ci ten list.', speaker='DZIADEK'),
+        ), SCENE)
+        self.assertEqual([b['text'] for b in blocks if b['type'] == 'parenthetical'], ['(spokojnie i z troską)'])
+        self.assertEqual(len([b for b in blocks if b['type'] == 'dialogue']), 3)
+
     def test_screenshot_style_repetitions_are_suppressed_without_removing_dialogue(self):
         model_blocks = [speech('szeptem do siebie', 'Pierwsza kwestia.'),
                         {'type': 'action', 'text': 'Maciek obraca kulę.'},

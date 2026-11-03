@@ -22,6 +22,53 @@ def generation_answer(*args, **kwargs):
 
 
 class SceneGenerationTests(ApiTestCase):
+    @patch('backend.ollama.generate')
+    def test_overlong_action_is_retried_before_saving_the_batch(self, generate):
+        self.scene.location_heading = 'WN. DOM'
+        self.scene.save()
+        wall = json.dumps({'blocks': [{'type': 'action', 'text': 'Anna wraca do domu. ' * 40}]})
+        generate.side_effect = [GENERATED_SCENE, wall, GENERATED_SCENE]
+        variants = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Anna spotyka sąsiada.', 'variant_count': 2,
+        }), 201).json()
+        self.assertEqual(len(variants), 2)
+        self.assertEqual(generate.call_count, 3)
+        self.assertIn('POPRAW FORMAT', generate.call_args.args[0])
+        self.assertEqual(len({call.kwargs['temperature'] for call in generate.call_args_list}), 1)
+        self.assertEqual(GenerationRun.objects.get(pk=variants[0]['run_id']).variants.count(), 2)
+
+    @patch('backend.ollama.generate', side_effect=generation_answer)
+    def test_requested_batch_sizes_use_the_same_snapshot_and_saved_temperature(self, generate):
+        self.assert_status(self.send('put', '/users/me/preferences', {
+            'llm_preferences': {'temperature': 0.4, 'max_tokens': 512},
+        }), 200)
+        for count in (1, 2, 3):
+            with self.subTest(count=count):
+                generate.reset_mock()
+                variants = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+                    'user_prompt': 'Napisz początek.', 'variant_count': count,
+                }), 201).json()
+                self.assertEqual([variant['variant_number'] for variant in variants], list(range(1, count + 1)))
+                self.assertEqual(generate.call_count, count)
+                base_prompt = generate.call_args_list[0].args[0]
+                self.assertTrue(all(call.args[0].startswith(base_prompt) for call in generate.call_args_list))
+                self.assertTrue(all('PODEJŚCIE WARIANTU' in call.args[0] for call in generate.call_args_list[1:]))
+                self.assertTrue(all(call.kwargs['temperature'] == 0.4 for call in generate.call_args_list))
+                run = GenerationRun.objects.get(pk=variants[0]['run_id'])
+                self.assertEqual(list(run.variants.values_list('pk', flat=True)), [variant['id'] for variant in variants])
+
+    @patch('backend.ollama.generate', side_effect=[GENERATED_SCENE, OllamaError('Model unavailable', status_code=503)])
+    def test_second_call_failure_leaves_no_partial_variants(self, generate):
+        self.scene.location_heading = 'WN. DOM'
+        self.scene.save()
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Przetestuj serię.', 'variant_count': 3,
+        }), 503)
+        self.assertEqual(generate.call_count, 2)
+        run = GenerationRun.objects.get(request__user_prompt='Przetestuj serię.')
+        self.assertEqual(run.status, 'failed')
+        self.assertFalse(run.variants.exists())
+
     @patch('backend.ollama.generate', side_effect=generation_answer)
     def test_current_database_scene_and_user_instruction_produce_a_persisted_variant(self, generate_text):
         self.scene.content_text = 'Aktualna treść zapisana w bazie.'
@@ -111,7 +158,9 @@ class SceneGenerationTests(ApiTestCase):
         before = SceneGenerationRequest.objects.count()
         for payload in ({'user_prompt': ''}, {'user_prompt': '   '}, {'user_prompt': 'Test', 'content_text': 'Forged'},
                         {'user_prompt': 'Test', 'model_name': 'Other model'},
-                        {'user_prompt': 'Test', 'generation_parameters': {'max_tokens': 0}}):
+                        {'user_prompt': 'Test', 'generation_parameters': {'max_tokens': 0}},
+                        {'user_prompt': 'Test', 'variant_count': 0}, {'user_prompt': 'Test', 'variant_count': 4},
+                        {'user_prompt': 'Test', 'variant_count': 1.5}, {'user_prompt': 'Test', 'variant_count': True}):
             with self.subTest(payload=payload):
                 self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 422)
         self.assertEqual(SceneGenerationRequest.objects.count(), before)

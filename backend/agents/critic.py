@@ -8,7 +8,7 @@ from langchain_ollama import ChatOllama
 from langsmith import tracing_context
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from backend.ollama import OLLAMA_BASE_URL, OLLAMA_BATCH_SIZE, OLLAMA_GPU_LAYERS, OLLAMA_MODEL, OLLAMA_TIMEOUT
+from ._model import create_local_chat_model
 
 
 class PromptReview(BaseModel):
@@ -72,14 +72,7 @@ SCENE_REVIEW = ChatPromptTemplate.from_messages([
 class CriticAgent:
     def __init__(self, model: ChatOllama | None = None):
         if model is None:
-            model = ChatOllama(
-                model=OLLAMA_MODEL,
-                base_url=OLLAMA_BASE_URL,
-                temperature=0,
-                num_gpu=OLLAMA_GPU_LAYERS,
-                num_batch=OLLAMA_BATCH_SIZE,
-                client_kwargs={'timeout': OLLAMA_TIMEOUT, 'trust_env': False},
-            )
+            model = create_local_chat_model()
         self._prompt_review = PROMPT_REVIEW | model.with_structured_output(PromptReview, method='json_schema')
         self._scene_review = SCENE_REVIEW | model.with_structured_output(SceneReview, method='json_schema')
 

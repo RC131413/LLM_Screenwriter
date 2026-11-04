@@ -70,7 +70,7 @@ export function useGeneration(userId: number | undefined) {
     };
   }, [userId]);
 
-  const active = cancellingJob ?? local ?? remote;
+  const active = cancellingJob ?? (local && local.generation_id !== remote?.generation_id ? local : remote);
   function draftFor(sceneId: number): Draft {
     if (active?.scene_id === sceneId) return { prompt: active.user_prompt, count: active.variant_count };
     if (drafts[sceneId]) return drafts[sceneId];

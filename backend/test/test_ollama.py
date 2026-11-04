@@ -21,6 +21,24 @@ def complete(text='OK', **extra):
 
 class OllamaClientTests(SimpleTestCase):
     @patch('backend.ollama.HTTPConnection')
+    def test_streams_chat_responses_with_roles_and_a_small_batch(self, transport):
+        messages = [{'role': 'system', 'content': 'Oceń scenę.'}, {'role': 'user', 'content': 'Scena.'}]
+        chunks = [
+            {'message': {'content': '{"score":'}, 'done': False},
+            {'message': {'content': '8}'}, 'done': True},
+        ]
+        transport.return_value.getresponse.return_value = Reply(
+            b''.join(json.dumps(chunk).encode() + b'\n' for chunk in chunks),
+        )
+
+        self.assertEqual(generate('Scena.', messages=messages, num_batch=64), '{"score":8}')
+        request = transport.return_value.request.call_args
+        self.assertEqual(request.args, ('POST', '/api/chat'))
+        payload = json.loads(request.kwargs['body'])
+        self.assertEqual(payload['messages'], messages)
+        self.assertEqual(payload['options']['num_batch'], 64)
+
+    @patch('backend.ollama.HTTPConnection')
     def test_posts_utf8_prompt_to_fixed_model_and_buffers_stream_on_gpu(self, transport):
         transport.return_value.getresponse.return_value = Reply(
             '{"response":"Połączenie ","done":false}\n{"response":"działa.","done":true}\n'.encode('utf-8'),

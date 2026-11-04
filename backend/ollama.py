@@ -28,7 +28,8 @@ class OllamaCancelled(OllamaError):
 
 def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = OLLAMA_TIMEOUT,
              temperature: float = 0.7, max_tokens: int = 128, output_schema: dict | None = None,
-             is_cancelled: Callable[[], bool] | None = None) -> str:
+             is_cancelled: Callable[[], bool] | None = None,
+             messages: list[dict[str, str]] | None = None, num_batch: int = OLLAMA_BATCH_SIZE) -> str:
     """Buffer tokens privately; closing the upstream socket cancels Ollama's request."""
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError('Prompt musi być niepustym tekstem.')
@@ -38,10 +39,14 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
     connection_type = HTTPSConnection if address.scheme == 'https' else HTTPConnection
     connection = connection_type(address.hostname, address.port, timeout=timeout)
     payload = {
-        'model': OLLAMA_MODEL, 'prompt': prompt, 'stream': True,
+        'model': OLLAMA_MODEL, 'stream': True,
         'options': {'num_predict': max_tokens, 'temperature': temperature,
-                    'num_gpu': OLLAMA_GPU_LAYERS, 'num_batch': OLLAMA_BATCH_SIZE},
+                    'num_gpu': OLLAMA_GPU_LAYERS, 'num_batch': num_batch},
     }
+    if messages is None:
+        payload['prompt'] = prompt
+    else:
+        payload['messages'] = messages
     if output_schema is not None:
         payload['format'] = output_schema
     stopped, cancelled = Event(), Event()
@@ -78,7 +83,7 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
     try:
         check_cancelled()
         connection.request(
-            'POST', address.path.rstrip('/') + '/api/generate',
+            'POST', address.path.rstrip('/') + ('/api/generate' if messages is None else '/api/chat'),
             body=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
             headers={'Content-Type': 'application/json', 'Accept': 'application/x-ndjson'},
         )
@@ -98,7 +103,10 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
                 data = json.loads(line.decode('utf-8'))
                 if not isinstance(data, dict) or data.get('error'):
                     raise OllamaError('Ollama zwróciła błąd podczas generowania.')
-                fragment = data.get('response', '')
+                message = data.get('message', {})
+                fragment = data.get('response', '') if messages is None else (
+                    message.get('content', '') if isinstance(message, dict) else None
+                )
                 if not isinstance(fragment, str):
                     raise OllamaError('Ollama zwróciła nieprawidłowy fragment odpowiedzi.')
                 parts.append(fragment)

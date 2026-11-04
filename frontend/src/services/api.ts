@@ -173,6 +173,8 @@ export interface CancelGenerationInput extends CreatePromptInput { generation_id
 export interface ApiActiveGeneration extends CancelGenerationInput {
   scene_id: ApiId;
   variant_count: 1 | 2 | 3;
+  current_agent?: string | null;
+  variant_number?: number | null;
 }
 export interface ApiPrompt {
   id: ApiId;

@@ -1,5 +1,4 @@
 import json
-from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -7,6 +6,7 @@ from backend.api.models import SceneVariant
 from backend.api.screenplay import can_generate_heading, generated_continuation, remove_repeated_prefix, scene_output_schema
 from backend.ollama import OllamaError
 from ._api_base import ApiTestCase
+from ._graph_transport import patch_writer
 
 
 HEADING = {'location_heading': 'WN. MIESZKANIE', 'time_of_day': 'RANO'}
@@ -107,7 +107,7 @@ class ContinuationFormatTests(SimpleTestCase):
 
 
 class ContinuationApiTests(ApiTestCase):
-    @patch('backend.ollama.generate')
+    @patch_writer()
     def test_generation_saves_only_new_text_without_echoed_scene_tail(self, generate):
         self.scene.content_text = 'Anna otwiera list.'
         self.scene.save()
@@ -118,7 +118,7 @@ class ContinuationApiTests(ApiTestCase):
         self.assertNotIn('heading', result['critic_metadata'])
         self.assertNotIn('heading', generate.call_args.kwargs['output_schema']['properties'])
 
-    @patch('backend.ollama.generate', return_value=json.dumps({'blocks': NEW_BLOCKS, 'heading': MODEL_HEADING}))
+    @patch_writer(return_value=json.dumps({'blocks': NEW_BLOCKS, 'heading': MODEL_HEADING}))
     def test_empty_scene_receives_heading_and_applying_twice_does_not_duplicate(self, generate):
         result = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Napisz początek.'}), 201).json()
         self.scene.refresh_from_db()
@@ -133,7 +133,7 @@ class ContinuationApiTests(ApiTestCase):
         self.assertEqual(len(self.scene.editor_metadata['blocks']), 2)
         self.assertEqual(self.scene.editor_metadata['applied_variant_ids'], [result['id']])
 
-    @patch('backend.ollama.generate', return_value=json.dumps({'blocks': NEW_BLOCKS, 'heading': MODEL_HEADING}))
+    @patch_writer(return_value=json.dumps({'blocks': NEW_BLOCKS, 'heading': MODEL_HEADING}))
     def test_user_edits_after_generation_are_preserved_and_disable_automatic_heading(self, generate):
         result = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Napisz początek.'}), 201).json()
         self.scene.content_text = 'Tekst dopisany ręcznie w trakcie generowania.'
@@ -147,7 +147,7 @@ class ContinuationApiTests(ApiTestCase):
         self.assertEqual(self.scene.editor_metadata['blocks'][0]['id'], 'manual')
         self.assertEqual(self.scene.editor_metadata['zoom'], 120)
 
-    @patch('backend.ollama.generate', return_value=json.dumps({'blocks': NEW_BLOCKS, 'heading': MODEL_HEADING}))
+    @patch_writer(return_value=json.dumps({'blocks': NEW_BLOCKS, 'heading': MODEL_HEADING}))
     def test_manual_heading_entered_after_generation_is_not_overwritten(self, generate):
         result = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Napisz początek.'}), 201).json()
         self.scene.location_heading = 'PL. PARK'
@@ -157,7 +157,7 @@ class ContinuationApiTests(ApiTestCase):
         self.scene.refresh_from_db()
         self.assertEqual((self.scene.location_heading, self.scene.time_of_day), ('PL. PARK', 'NOC'))
 
-    @patch('backend.ollama.generate', return_value=json.dumps({'blocks': NEW_BLOCKS}))
+    @patch_writer(return_value=json.dumps({'blocks': NEW_BLOCKS}))
     def test_no_generated_heading_for_empty_scene_with_manual_heading(self, generate):
         self.scene.location_heading = 'WN. BIURO'
         self.scene.time_of_day = 'DZIEŃ'

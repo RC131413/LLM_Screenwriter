@@ -1,7 +1,6 @@
 """Session-authenticated AgentDraft API. Engine-produced records are read-only."""
 
 from datetime import timedelta
-from time import perf_counter
 from typing import Literal
 from uuid import uuid4
 
@@ -23,20 +22,16 @@ from ninja.throttling import AnonRateThrottle
 from ninja.utils import check_csrf
 
 from backend import ollama
+from backend.agents.services import generate_variants_for_run, scene_context
 
 from . import scheams as s
-from .screenplay import (
-    UNCLEAR_PROMPT, SceneStructureError, append_variant, blocks_text,
-    generated_continuation, obviously_unintelligible, scene_output_schema,
-)
+from .screenplay import UNCLEAR_PROMPT, append_variant, obviously_unintelligible
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
 )
 from .services import (
-    SCENE_GENERATION_SYSTEM_PROMPT, SCENE_VARIANT_APPROACHES,
-    generation_is_cancelled, get_owned, lock_project, owned, profile_for, prompt_snapshot,
-    save_validated, scene_generation_prompt, validate_avatar,
+    get_owned, lock_project, owned, profile_for, prompt_snapshot, save_validated, validate_avatar,
 )
 
 
@@ -444,7 +439,7 @@ def create_prompt(request, scene_id: s.PositiveId, payload: s.PromptIn):
 
 
 @transaction.atomic
-def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', system_prompt=''):
+def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', with_history=False):
     scene = get_owned(Scene, request.auth, scene_id)
     lock_project(request.auth, scene.project_id)
     scene = get_object_or_404(owned(Scene, request.auth).select_related('project', 'act'), pk=scene_id)
@@ -457,8 +452,8 @@ def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', syste
         })
     prompt = SceneGenerationRequest(
         scene=scene, user_prompt=payload.user_prompt,
-        context_snapshot=prompt_snapshot(scene, profile),
-        model_name=model_name, system_prompt=system_prompt, generation_parameters=parameters.model_dump(),
+        context_snapshot=scene_context(scene, profile) if with_history else prompt_snapshot(scene, profile),
+        model_name=model_name, generation_parameters=parameters.model_dump(),
     )
     return save_validated(prompt)
 
@@ -476,81 +471,10 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
     run = _prepare_generation(request, scene_id, payload)
     if run.status == 'cancelled':
         return 409, {'detail': 'Generowanie zostało anulowane.'}
-    prompt = run.request
-    started = perf_counter()
-    # No database transaction or row lock is held during the slow HTTP request.
-    scene = prompt.context_snapshot['scene']
-    model_prompt = scene_generation_prompt(prompt)
-    output_schema = scene_output_schema(scene)
-    parentheticals = prompt.context_snapshot.get('writing_style_preferences', {}).get('parentheticals', 'sparingly')
-    results = []
-
-    def is_cancelled():
-        return generation_is_cancelled(run.pk)
-
     try:
-        for number in range(1, (payload.variant_count or 1) + 1):
-            variant_prompt = (
-                f'{model_prompt}\n\nPODEJŚCIE WARIANTU: {SCENE_VARIANT_APPROACHES[number - 1]} '
-                'Zastosuj wskazówki aktorskie przy kluczowych kwestiach tylko wtedy, gdy pomagają je zagrać i ustawienia na to pozwalają. '
-                'Uszanuj polecenie autora, jeśli prosi o scenę niemą.'
-            )
-            for attempt in range(2):
-                current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
-                if current_status is None:
-                    raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
-                if current_status != 'running':
-                    raise ollama.OllamaCancelled()
-                answer = ollama.generate(
-                    variant_prompt, output_schema=output_schema,
-                    is_cancelled=is_cancelled,
-                    **prompt.generation_parameters,
-                )
-                current_status = GenerationRun.objects.filter(pk=run.pk).values_list('status', flat=True).first()
-                if current_status is None:
-                    raise HttpError(404, 'Nie znaleziono sceny lub generowania.')
-                if current_status != 'running':
-                    raise ollama.OllamaCancelled()
-                try:
-                    blocks, heading = generated_continuation(answer, scene, parentheticals=parentheticals)
-                except SceneStructureError as error:
-                    if attempt == 1:
-                        raise
-                    variant_prompt += (
-                        f'\n\nPOPRAW FORMAT: {error} '
-                        'Napisz od nowa tylko krótki dalszy fragment. Oddziel każde działanie '
-                        'i każdą wypowiedź. Zakończ przed zmianą miejsca lub czasu, bez przejścia do kolejnej sceny. '
-                        'Nie streszczaj wcześniejszej sceny.'
-                    )
-                else:
-                    results.append((blocks, heading))
-                    break
+        variants = generate_variants_for_run(run, user=request.auth, variant_count=payload.variant_count)
     except ollama.OllamaError as error:
-        finished = timezone.now()
-        GenerationRun.objects.filter(pk=run.pk, status='running').update(
-            status='cancelled' if isinstance(error, ollama.OllamaCancelled) else 'failed', finished_at=finished, updated_at=finished,
-            total_duration_ms=int((perf_counter() - started) * 1000), error_message=str(error),
-        )
         return error.status_code, {'detail': str(error)}
-    with transaction.atomic():
-        lock_project(request.auth, prompt.scene.project_id)
-        # A scene can have been deleted while Ollama was generating its response.
-        run = get_object_or_404(GenerationRun.objects.select_for_update(), pk=run.pk)
-        if run.status != 'running':
-            return 409, {'detail': run.error_message or 'Generowanie zostało zatrzymane.'}
-        variants = [save_validated(SceneVariant(
-            run=run, scene_id=prompt.scene_id, variant_number=number,
-            title=f'Wariant {number}' if payload.variant_count is not None else 'Wariant Bielika',
-            generated_full_text=blocks_text(blocks),
-            critic_metadata={
-                'format': 'screenplay_blocks_v1', 'operation': 'append', 'blocks': blocks,
-                **({'heading': heading} if heading else {}),
-            },
-        )) for number, (blocks, heading) in enumerate(results, start=1)]
-        save_validated(run, {
-            'status': 'completed', 'finished_at': timezone.now(),
-            'total_duration_ms': int((perf_counter() - started) * 1000),
-        })
     return 201, variants if payload.variant_count is not None else variants[0]
 
 
@@ -573,12 +497,13 @@ def _prepare_generation(request, scene_id, payload, *, cancelled=False):
         raise HttpError(409, 'Inna scena jest już generowana. Poczekaj na zakończenie albo anuluj generowanie.')
     prompt = _create_prompt(
         request, scene_id, payload, model_name=ollama.OLLAMA_MODEL,
-        system_prompt=SCENE_GENERATION_SYSTEM_PROMPT,
+        with_history=not cancelled,
     )
     return save_validated(GenerationRun(
         request=prompt, status='cancelled' if cancelled else 'running', started_at=timezone.now(),
         finished_at=timezone.now() if cancelled else None,
-        run_metadata={'generation_id': generation_id, 'variant_count': getattr(payload, 'variant_count', None) or 1},
+        run_metadata={'engine': 'langgraph', 'generation_id': generation_id,
+                      'variant_count': getattr(payload, 'variant_count', None) or 1},
     ))
 
 
@@ -601,9 +526,12 @@ def active_generation(request, response: HttpResponse):
     run = _active_generation(request.auth)
     if run is None:
         return None
+    agent = run.agent_executions.filter(status='running').last()
     return {
         'scene_id': run.request.scene_id, 'generation_id': run.run_metadata['generation_id'],
         'user_prompt': run.request.user_prompt, 'variant_count': run.run_metadata.get('variant_count', 1),
+        'current_agent': agent.agent_name if agent else None,
+        'variant_number': agent.input_payload.get('variant_number') if agent else None,
     }
 
 

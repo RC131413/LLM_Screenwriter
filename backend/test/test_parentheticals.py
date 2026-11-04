@@ -1,11 +1,11 @@
 import json
 from copy import deepcopy
-from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
 from backend.api.screenplay import generated_continuation
 from ._api_base import ApiTestCase
+from ._graph_transport import patch_writer
 
 
 SCENE = {'content_text': '', 'location_heading': 'WN. CHATA', 'time_of_day': 'ŚWIT'}
@@ -92,7 +92,7 @@ class ParentheticalFormatTests(SimpleTestCase):
 
 
 class ParentheticalApiTests(ApiTestCase):
-    @patch('backend.ollama.generate', return_value=REPEATED)
+    @patch_writer(return_value=REPEATED)
     def test_preview_text_and_applied_scene_share_refined_parentheticals(self, generate):
         variant = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
             'user_prompt': 'Maciek rozpoznaje znak na kuli.',
@@ -107,7 +107,7 @@ class ParentheticalApiTests(ApiTestCase):
         self.assertEqual(self.scene.content_text, variant['generated_full_text'])
         generate.assert_called_once()
 
-    @patch('backend.ollama.generate', return_value=REPEATED)
+    @patch_writer(return_value=REPEATED)
     def test_ignore_preference_removes_all_new_parentheticals_even_if_model_returns_them(self, generate):
         self.assert_status(self.send('put', '/users/me/preferences', {
             'writing_style_preferences': {'parentheticals': 'ignore'},

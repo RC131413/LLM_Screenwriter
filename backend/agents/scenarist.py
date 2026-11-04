@@ -49,7 +49,8 @@ WRITE_SCENE = ChatPromptTemplate.from_messages([
      'Jeśli otrzymasz revision, zwróć kompletną poprawioną wersję previous_draft. '
      'Zastosuj required_changes, zachowaj poprawne fragmenty i plan. '
      'Nie dopisuj dalszego ciągu do poprzedniego wariantu i nie przepisuj tekstu zapisanego w context.scene. '
-     '{heading_instruction}'),
+     'Uwzględnij wariant podejścia, preferowany ton dialogu i styl opisu akcji z context. '
+     '{heading_instruction}{format_instruction}'),
     ('human', '{payload}'),
 ])
 
@@ -74,7 +75,7 @@ class ScenaristAgent:
 
     def write_scene_draft(
         self, *, user_prompt: str, context: dict[str, Any], beats: list[str],
-        revision: SceneRevision | None = None,
+        revision: SceneRevision | None = None, format_feedback: str = '',
     ) -> SceneDraft:
         """Generate a structured fragment from the archive and the director's ordered beats.
 
@@ -99,6 +100,7 @@ class ScenaristAgent:
             generated = chain.invoke({
                 'payload': json.dumps(payload, ensure_ascii=False),
                 'heading_instruction': heading_instruction,
+                'format_instruction': f'\nPOPRAW FORMAT: {format_feedback}' if format_feedback else '',
             })
 
         parentheticals = context.get('writing_style_preferences', {}).get('parentheticals', 'sparingly')

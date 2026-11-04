@@ -2,7 +2,12 @@
 
 from typing import Any, Literal, NotRequired, TypedDict
 
+from langchain_core.exceptions import OutputParserException
+from langchain_ollama import ChatOllama
 from langgraph.graph import END, START, StateGraph
+from pydantic import ValidationError
+
+from backend.api.screenplay import SCENE_BOUNDARY_ERROR, SceneStructureError
 
 from .archivist import ArchivedContext, ArchivistAgent
 from .critic import CriticAgent, SceneReview
@@ -46,12 +51,12 @@ def _writing_context(state: SceneGraphState) -> dict[str, Any]:
     return source | archived
 
 
-def build_scene_graph():
+def build_scene_graph(*, model: ChatOllama | None = None, writing_model: ChatOllama | None = None):
     """Compile the writing workflow for a caller-supplied context snapshot."""
-    archivist = ArchivistAgent()
-    director = DirectorAgent()
-    scenarist = ScenaristAgent()
-    critic = CriticAgent()
+    archivist = ArchivistAgent(model)
+    director = DirectorAgent(model)
+    scenarist = ScenaristAgent(writing_model or model)
+    critic = CriticAgent(model)
 
     def archive(state: SceneGraphState) -> dict[str, ArchivedContext]:
         return {'archived_context': archivist.prepare_context(
@@ -76,10 +81,21 @@ def build_scene_graph():
                     for finding in state['critic_review'].findings if finding.severity == 'required'
                 ],
             }
-        draft = scenarist.write_scene_draft(
+        arguments = dict(
             user_prompt=state['user_prompt'], context=_writing_context(state), beats=state['beats'],
             revision=revision,
         )
+        try:
+            draft = scenarist.write_scene_draft(**arguments)
+        except SceneStructureError as error:
+            draft = scenarist.write_scene_draft(**arguments, format_feedback=str(error))
+        except OutputParserException as error:
+            cause = error.__cause__
+            if not isinstance(cause, ValidationError) or not any(
+                issue.get('ctx', {}).get('tag') == 'transition' for issue in cause.errors()
+            ):
+                raise
+            draft = scenarist.write_scene_draft(**arguments, format_feedback=SCENE_BOUNDARY_ERROR)
         return {
             'scene_text': draft.text, 'scene_blocks': draft.blocks, 'scene_heading': draft.heading,
             'revision_count': revision_count,

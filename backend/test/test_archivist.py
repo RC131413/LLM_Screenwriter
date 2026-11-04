@@ -93,13 +93,33 @@ class ArchivistAgentTests(SimpleTestCase):
             ],
         )
 
-    def test_rejects_character_outside_supplied_profiles(self):
-        self.reply['characters'] = [{'name': 'Olek', 'profile': 'Szuka klucza.'}]
+    def test_omits_character_outside_supplied_profiles(self):
+        self.reply['characters'] = [
+            {'name': 'MARTA', 'profile': 'Szuka biletu.'},
+            {'name': 'Olek', 'profile': 'Szuka klucza.'},
+        ]
 
-        with self.assertRaisesRegex(ValueError, 'postać spoza przekazanych kart'):
-            self.archivist.prepare_context(
-                user_prompt='Kontynuuj.', context={'characters': [{'name': 'Marta'}]},
-            )
+        result = self.archivist.prepare_context(
+            user_prompt='Kontynuuj.', context={'characters': [{'name': 'Marta'}]},
+        )
+        self.assertEqual([character.name for character in result.characters], ['MARTA'])
+
+    def test_history_can_include_people_without_character_cards(self):
+        self.reply = {
+            'characters': [{'name': 'Maciek', 'profile': 'Szuka śladów.'}],
+            'previous_scenes': [{'scene_number': 7, 'summary': 'Maciek spotkał starszego mężczyznę.'}],
+            'continuity_facts': ['Maciek rozmawiał ze starszym mężczyzną.'],
+            'open_threads': [],
+        }
+        result = self.archivist.prepare_context(
+            user_prompt='Co dalej z Maćkiem i starszym mężczyzną?',
+            context={
+                'characters': [],
+                'previous_scenes': [{'scene_number': 7, 'content_text': 'Maciek spotkał starszego mężczyznę.'}],
+            },
+        )
+        self.assertEqual(result.model_dump(), {**self.reply, 'characters': []})
+        self.assertEqual(len(self.requests), 1)
 
     def test_rejects_scene_outside_supplied_history(self):
         self.reply['previous_scenes'] = [{'scene_number': 3, 'summary': 'Marta odzyskuje bilet.'}]

@@ -1,6 +1,5 @@
 import json
 from datetime import timedelta
-from unittest.mock import patch
 from uuid import uuid4
 
 from django.test import Client
@@ -9,6 +8,7 @@ from django.utils import timezone
 from backend.api.models import GenerationRun, SceneGenerationRequest, SceneVariant
 from backend.ollama import OllamaCancelled
 from ._api_base import ApiTestCase
+from ._graph_transport import patch_writer
 
 
 ANSWER = json.dumps({'blocks': [{'type': 'speech', 'speaker': 'ANNA', 'parenthetical': None, 'spoken_text': 'Nowa scena.'}],
@@ -16,13 +16,14 @@ ANSWER = json.dumps({'blocks': [{'type': 'speech', 'speaker': 'ANNA', 'parenthet
 
 
 class GenerationCancellationTests(ApiTestCase):
-    @patch('backend.ollama.generate')
+    @patch_writer()
     def test_active_run_is_recoverable_and_blocks_another_scene(self, generate):
         payload = self.payload()
 
         def model(*args, **kwargs):
             active = self.assert_status(self.send('get', '/generation/active'), 200).json()
-            self.assertEqual(active, {**payload, 'scene_id': self.scene.pk, 'variant_count': 1})
+            self.assertEqual(active, {**payload, 'scene_id': self.scene.pk, 'variant_count': 1,
+                                      'current_agent': 'Scenarzysta', 'variant_number': 1})
             other_account = Client()
             other_account.force_login(self.other_user)
             self.assertIsNone(self.send('get', '/generation/active', client=other_account).json())
@@ -52,7 +53,7 @@ class GenerationCancellationTests(ApiTestCase):
     def cancel(self, payload, scene_id=None):
         return self.send('post', f'/scenes/{scene_id or self.scene.pk}/cancel-generation', payload)
 
-    @patch('backend.ollama.generate')
+    @patch_writer()
     def test_cancel_arriving_before_generate_prevents_any_model_call(self, generate):
         payload = self.payload()
         count = SceneGenerationRequest.objects.count()
@@ -64,7 +65,7 @@ class GenerationCancellationTests(ApiTestCase):
         self.assertEqual(run.variants.count(), 0)
         generate.assert_not_called()
 
-    @patch('backend.ollama.generate')
+    @patch_writer()
     def test_cancel_during_model_call_does_not_save_partial_output(self, generate):
         payload = self.payload()
 
@@ -83,7 +84,7 @@ class GenerationCancellationTests(ApiTestCase):
         self.scene.refresh_from_db()
         self.assertEqual(self.scene.content_text, '')
 
-    @patch('backend.ollama.generate')
+    @patch_writer()
     def test_cancellation_during_the_second_variant_discards_the_batch(self, generate):
         payload = self.payload()
 
@@ -98,7 +99,7 @@ class GenerationCancellationTests(ApiTestCase):
         self.assertEqual(generate.call_count, 2)
         self.assertEqual(SceneVariant.objects.count(), before)
 
-    @patch('backend.ollama.generate', return_value=ANSWER)
+    @patch_writer(return_value=ANSWER)
     def test_late_cancel_discards_only_its_own_result_and_is_idempotent(self, generate):
         payload = self.payload()
         variant = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 201).json()
@@ -108,7 +109,7 @@ class GenerationCancellationTests(ApiTestCase):
         self.assertTrue(SceneVariant.objects.filter(pk=self.variant.pk).exists())
         self.assertEqual(GenerationRun.objects.get(pk=variant['run_id']).status, 'cancelled')
 
-    @patch('backend.ollama.generate', return_value=ANSWER)
+    @patch_writer(return_value=ANSWER)
     def test_duplicate_generation_id_does_not_start_a_second_generation(self, generate):
         payload = self.payload()
         self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 201)

@@ -166,17 +166,16 @@ X-CSRFToken: <current CSRF token>
 ```
 
 The server verifies scene ownership and reads its current text and heading from
-PostgreSQL. It freezes a context snapshot, combines the scene with `user_prompt`
-and sends a direct request to Ollama. The browser cannot override the model or
-provide a replacement scene context. Optional `generation_parameters` accepts
-`temperature` and `max_tokens`. No database lock is held while waiting for Ollama.
+PostgreSQL. It freezes a context snapshot and runs the LangGraph workflow
+Archiwista → Reżyser → Scenarzysta → Krytyk. The critic can request at most two
+rewrites for each variant. Optional `generation_parameters` sets the writer's
+`temperature` and `max_tokens`. Inference runs outside the database transaction.
 
-The endpoint returns HTTP 201 with a `VariantOut` object, including the generated
-text in `generated_full_text`. Prompt history, a real `GenerationRun` and its
-`SceneVariant` are persisted using the existing ERD tables. Runs are marked
-`completed` or `failed`, with timing and error details. No agents or LangGraph are
-used and no `AgentExecution` rows are created. The original scene is preserved
-until the user clicks "Zastosuj wybrany wariant".
+The endpoint returns HTTP 201 with a `VariantOut` object or a list when
+`variant_count` is specified. It saves the batch together with the critic's
+score, feedback and revision status for each variant. The run records the agent
+steps, and `GET /api/generation/active` reports the current agent and variant.
+The original scene is preserved until the user clicks "Zastosuj wybrany wariant".
 
 The red "Anuluj generowanie" button below "Generuj scenę" sends an authenticated,
 CSRF-protected `POST /api/scenes/{scene_id}/cancel-generation` with the same

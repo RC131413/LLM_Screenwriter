@@ -247,6 +247,8 @@ class ActiveGenerationOut(Schema):
     generation_id: UUID
     user_prompt: str
     variant_count: Literal[1, 2, 3]
+    current_agent: str | None = None
+    variant_number: int | None = None
 
 
 class PromptOut(Schema):

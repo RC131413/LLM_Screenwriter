@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from '../../src/App';
+import type { ApiActiveGeneration } from '../../src/services/api';
 import { preferencesFixture, userFixture, variantFixture } from '../support/fixtures';
 import { deferred, jsonResponse } from '../support/http';
 import { workspaceHttp } from '../support/workspaceHttp';
@@ -9,14 +10,15 @@ import { workspaceHttp } from '../support/workspaceHttp';
 describe('application → hooks → API client → HTTP', () => {
   it('restores a running generation after visiting statistics and reloading the editor', async () => {
     const response = deferred<Response>();
-    let active: { scene_id: number; user_prompt: string; generation_id: string; variant_count: number } | null = null;
+    let active: ApiActiveGeneration | null = null;
     const http = workspaceHttp((call, workspace) => {
       if (call.path === '/users/me') return jsonResponse(userFixture());
       if (call.path === '/users/me/preferences') return jsonResponse(preferencesFixture());
       if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
       if (call.path === '/generation/active') return jsonResponse(active);
       if (call.path === '/scenes/20/generate') {
-        active = { ...(call.body as NonNullable<typeof active>), scene_id: 20 };
+        active = { ...(call.body as Omit<ApiActiveGeneration, 'scene_id'>), scene_id: 20,
+          current_agent: 'Krytyk', variant_number: 1 };
         return response.promise;
       }
       if (call.path === '/scenes/20/cancel-generation') {
@@ -49,6 +51,7 @@ describe('application → hooks → API client → HTTP', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Anuluj generowanie' })).toBeEnabled());
     expect(screen.getByLabelText('Kierunek sceny')).toHaveValue('Pisz dalej');
     expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Generowanie... Krytyk · wariant 1/2')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Anuluj generowanie' }));
     expect(await screen.findByText('Generowanie anulowane.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generuj scenę' })).toBeEnabled();

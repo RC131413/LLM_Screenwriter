@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from pydantic import TypeAdapter, ValidationError as PydanticValidationError
 
 from backend.ollama import OllamaError
-from .scheams import EditorBlock, GeneratedHeading, GeneratedScene, GeneratedSceneWithHeading
+from backend.screenplay_schemas import EditorBlock, GeneratedHeading, GeneratedScene, GeneratedSceneWithHeading
 
 
 class SceneStructureError(OllamaError):
@@ -241,6 +241,11 @@ def remove_repeated_prefix(existing_text, blocks):
 
 def generated_continuation(answer, scene, *, parentheticals='sparingly'):
     parsed = _parse_generation(answer, can_generate_heading(scene))
+    return compose_generated_continuation(parsed, scene, parentheticals=parentheticals)
+
+
+def compose_generated_continuation(parsed, scene, *, parentheticals='sparingly'):
+    """Format a validated model response against the saved scene."""
     heading = model_heading(parsed.heading) if isinstance(parsed, GeneratedSceneWithHeading) else None
     blocks = _generated_blocks(parsed)
     blocks = remove_heading_blocks(blocks, heading or {

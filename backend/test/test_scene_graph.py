@@ -62,6 +62,8 @@ class SceneGraphTests(SimpleTestCase):
         result = self.run_graph([draft(text), {'score': 8, 'feedback': 'Drobna sugestia.', 'findings': [ADVICE]}])
 
         self.assertEqual(result['scene_text'], text)
+        self.assertEqual([(block['type'], block['text']) for block in result['scene_blocks']], [('action', text)])
+        self.assertIsNone(result['scene_heading'])
         self.assertEqual(result['review_status'], 'accepted')
         self.assertEqual(result['revision_count'], 0)
         self.assertEqual(result['critic_feedback'], 'Drobna sugestia.')

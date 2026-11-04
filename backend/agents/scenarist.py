@@ -1,6 +1,7 @@
 """Turn the director's beats and the archivist's context into screenplay text."""
 
 import json
+from dataclasses import dataclass
 from typing import Any, TypedDict
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -21,6 +22,13 @@ class SceneRevision(TypedDict):
     previous_draft: str
     feedback: str
     required_changes: list[dict[str, str]]
+
+
+@dataclass(frozen=True)
+class SceneDraft:
+    text: str
+    blocks: list[dict[str, str]]
+    heading: dict[str, str] | None
 
 
 WRITE_SCENE = ChatPromptTemplate.from_messages([
@@ -59,7 +67,16 @@ class ScenaristAgent:
         self, *, user_prompt: str, context: dict[str, Any], beats: list[str],
         revision: SceneRevision | None = None,
     ) -> str:
-        """Return new screenplay text from a JSON-ready archive and the director's ordered beats.
+        """Return the formatted text of the generated fragment."""
+        return self.write_scene_draft(
+            user_prompt=user_prompt, context=context, beats=beats, revision=revision,
+        ).text
+
+    def write_scene_draft(
+        self, *, user_prompt: str, context: dict[str, Any], beats: list[str],
+        revision: SceneRevision | None = None,
+    ) -> SceneDraft:
+        """Generate a structured fragment from the archive and the director's ordered beats.
 
         Optional context keys scene and writing_style_preferences describe the saved draft and style.
         A generated heading is included when scene is supplied and has neither text nor a heading.
@@ -88,5 +105,5 @@ class ScenaristAgent:
         blocks, heading = compose_generated_continuation(generated, scene, parentheticals=parentheticals)
         text = blocks_text(blocks)
         if heading:
-            return f'{heading["location_heading"]} - {heading["time_of_day"]}\n\n{text}'
-        return text
+            text = f'{heading["location_heading"]} - {heading["time_of_day"]}\n\n{text}'
+        return SceneDraft(text=text, blocks=blocks, heading=heading)

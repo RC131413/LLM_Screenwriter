@@ -23,6 +23,8 @@ class SceneGraphState(SceneGraphInput):
     archived_context: NotRequired[ArchivedContext]
     beats: NotRequired[list[str]]
     scene_text: NotRequired[str]
+    scene_blocks: NotRequired[list[dict[str, str]]]
+    scene_heading: NotRequired[dict[str, str] | None]
     revision_count: NotRequired[int]
     critic_feedback: NotRequired[str]
     critic_review: NotRequired[SceneReview]
@@ -61,7 +63,7 @@ def build_scene_graph():
             user_prompt=state['user_prompt'], context=_writing_context(state),
         )}
 
-    def write(state: SceneGraphState) -> dict[str, str | int]:
+    def write(state: SceneGraphState) -> dict[str, Any]:
         revision: SceneRevision | None = None
         revision_count = state.get('revision_count', 0)
         if 'scene_text' in state:
@@ -74,10 +76,14 @@ def build_scene_graph():
                     for finding in state['critic_review'].findings if finding.severity == 'required'
                 ],
             }
-        return {'scene_text': scenarist.write_scene(
+        draft = scenarist.write_scene_draft(
             user_prompt=state['user_prompt'], context=_writing_context(state), beats=state['beats'],
             revision=revision,
-        ), 'revision_count': revision_count}
+        )
+        return {
+            'scene_text': draft.text, 'scene_blocks': draft.blocks, 'scene_heading': draft.heading,
+            'revision_count': revision_count,
+        }
 
     def review(state: SceneGraphState) -> dict[str, SceneReview | str]:
         assessment = critic.review_scene(

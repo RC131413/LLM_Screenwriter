@@ -59,6 +59,7 @@ SCENE_REVIEW = ChatPromptTemplate.from_messages([
      'Sprawdź przede wszystkim, czy decyzje, reakcje i sposób mówienia postaci są spójne z ich '
      'profilem psychologicznym, celami, obawami i dotychczasową wiedzą. Sprawdź ciągłość zdarzeń, '
      'zgodność z poleceniem i celem sceny oraz czytelny podział na akcję, postacie, dialogi i didaskalia. '
+     'Jeśli podano plan beats, sprawdź, czy istotne zdarzenia z planu zostały zrealizowane w podanej kolejności. '
      'Nie traktuj braku kontekstu jako sprzeczności. Kontynuacja może nie mieć własnego nagłówka, '
      'a scena może być niema i nie zawierać didaskaliów. '
      'Podaj ocenę całkowitą od 0 do 10 i krótkie uzasadnienie po polsku. Zwróć najwyżej cztery '

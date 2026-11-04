@@ -1,7 +1,7 @@
 """Turn the director's beats and the archivist's context into screenplay text."""
 
 import json
-from typing import Any
+from typing import Any, TypedDict
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
@@ -15,6 +15,12 @@ from .director import ScenePlan
 
 
 SCENE_WRITE_TIMEOUT = 300
+
+
+class SceneRevision(TypedDict):
+    previous_draft: str
+    feedback: str
+    required_changes: list[dict[str, str]]
 
 
 WRITE_SCENE = ChatPromptTemplate.from_messages([
@@ -32,6 +38,9 @@ WRITE_SCENE = ChatPromptTemplate.from_messages([
      'lub preferencje autora jej nie dopuszczają, wpisz w parenthetical null. '
      'Pozostań w miejscu i czasie bieżącej sceny. Przy kontynuacji zacznij po ostatnim zapisanym '
      'zdarzeniu. W blocks nie umieszczaj nagłówków, przejść, numerów punktów ani komentarzy. '
+     'Jeśli otrzymasz revision, zwróć kompletną poprawioną wersję previous_draft. '
+     'Zastosuj required_changes, zachowaj poprawne fragmenty i plan. '
+     'Nie dopisuj dalszego ciągu do poprzedniego wariantu i nie przepisuj tekstu zapisanego w context.scene. '
      '{heading_instruction}'),
     ('human', '{payload}'),
 ])
@@ -46,7 +55,10 @@ class ScenaristAgent:
             GeneratedSceneWithHeading, method='json_schema',
         )
 
-    def write_scene(self, *, user_prompt: str, context: dict[str, Any], beats: list[str]) -> str:
+    def write_scene(
+        self, *, user_prompt: str, context: dict[str, Any], beats: list[str],
+        revision: SceneRevision | None = None,
+    ) -> str:
         """Return new screenplay text from a JSON-ready archive and the director's ordered beats.
 
         Optional context keys scene and writing_style_preferences describe the saved draft and style.
@@ -57,9 +69,9 @@ class ScenaristAgent:
         plan = ScenePlan(beats=beats)
         scene = context.get('scene', {})
         generate_heading = 'scene' in context and can_generate_heading(scene)
-        payload = json.dumps(
-            {'user_prompt': user_prompt, 'context': context, 'beats': plan.beats}, ensure_ascii=False,
-        )
+        payload: dict[str, Any] = {'user_prompt': user_prompt, 'context': context, 'beats': plan.beats}
+        if revision is not None:
+            payload['revision'] = revision
         chain = self._write_with_heading if generate_heading else self._write_body
         heading_instruction = (
             'Scena jest pusta. Dodaj heading z polami location_type (WN. lub PL.), location_heading '
@@ -67,7 +79,10 @@ class ScenaristAgent:
             if generate_heading else 'Zwróć same bloki sceny, bez nagłówka.'
         )
         with tracing_context(enabled=False):
-            generated = chain.invoke({'payload': payload, 'heading_instruction': heading_instruction})
+            generated = chain.invoke({
+                'payload': json.dumps(payload, ensure_ascii=False),
+                'heading_instruction': heading_instruction,
+            })
 
         parentheticals = context.get('writing_style_preferences', {}).get('parentheticals', 'sparingly')
         blocks, heading = compose_generated_continuation(generated, scene, parentheticals=parentheticals)

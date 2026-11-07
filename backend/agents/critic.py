@@ -23,15 +23,15 @@ class SceneFinding(BaseModel):
 
     category: Literal['character', 'continuity', 'prompt_alignment', 'screenplay_format']
     severity: Literal['required', 'advisory']
-    issue: str
-    suggestion: str
+    issue: str = Field(description='Jeden konkretny problem z krótkim przykładem, w jednym zdaniu.')
+    suggestion: str = Field(description='Jedna konkretna poprawka w krótkim zdaniu, bez przepisywania sceny.')
 
 
 class SceneReview(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True, str_min_length=1)
 
     score: int = Field(ge=0, le=10)
-    feedback: str
+    feedback: str = Field(description='Krótka ocena po polsku: czy zrealizowano konkretny cel sceny oraz najważniejszy wniosek; bez listy porad.')
     findings: list[SceneFinding] = Field(max_length=4)
 
     @computed_field
@@ -62,10 +62,20 @@ SCENE_REVIEW = ChatPromptTemplate.from_messages([
      'Jeśli podano plan beats, sprawdź, czy istotne zdarzenia z planu zostały zrealizowane w podanej kolejności. '
      'Nie traktuj braku kontekstu jako sprzeczności. Kontynuacja może nie mieć własnego nagłówka, '
      'a scena może być niema i nie zawierać didaskaliów. '
-     'Podaj ocenę całkowitą od 0 do 10 i krótkie uzasadnienie po polsku. Zwróć najwyżej cztery '
-     'rzeczywiste problemy, każdy z konkretnym przykładem i propozycją poprawki. '
+     'Wymagania tej sceny określają user_prompt, scene_goal i beats, jeśli podano. '
+     'Sprawdź wszystkie warunki scene_goal, także miejsce i rezultat; częściowa realizacja nie wystarcza. '
+     'Opis aktu to szerszy plan: zapowiedzi późniejszych wydarzeń nie są obowiązkami bieżącej sceny. '
+     'Lęk postaci nie wymaga ciągłej paniki ani deklaracji słownej; reakcja w działaniu też go wyraża. '
+     'Sugestia większych emocji to advisory, nie required. '
+     'Podaj score od 0 do 10 i feedback po polsku: nazwij konkretny cel i oceń jego realizację, '
+     'następnie podaj najważniejszy wniosek w 2–3 krótkich zdaniach, zwykle do 50 słów. '
+     'Nie streszczaj sceny, nie dopisuj porad ani nie potwierdzaj realizacji niepodanego planu. '
+     'W findings wypisz najwyżej cztery rzeczywiste problemy; lista może być pusta. '
+     'Nie musisz zgłaszać problemu w każdej kategorii. Nie wymyślaj uwag, by wypełnić limit. '
+     'W issue nazwij konkretny błąd i krótki przykład jednym zdaniem; '
+     'w suggestion podaj jedną wykonalną poprawkę jednym krótkim zdaniem. '
      'Oznacz istotne sprzeczności lub naruszenia jako required, a sugestie redakcyjne jako advisory. '
-     'Jeśli nie ma uwag, zwróć pustą listę findings. Nie przepisuj sceny.'),
+     'Nie powtarzaj listy uwag w feedback i nie przepisuj sceny. Wszystkie opisy zwróć po polsku.'),
     ('human', '{payload}'),
 ])
 
@@ -89,8 +99,11 @@ class CriticAgent:
     ) -> SceneReview:
         if not text.strip():
             raise ValueError('Podaj tekst sceny do oceny.')
+        context = context or {}
         payload = json.dumps(
-            {'scene_text': text, 'user_prompt': user_prompt, 'context': context or {}}, ensure_ascii=False,
+            {'scene_text': text, 'user_prompt': user_prompt, 'context': context,
+             'scene_goal': context.get('scene', {}).get('ai_metadata', {}).get('scene_goal', '')},
+            ensure_ascii=False,
         )
         with tracing_context(enabled=False):
             return self._scene_review.invoke({'payload': payload})

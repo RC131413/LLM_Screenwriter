@@ -83,6 +83,7 @@ class CriticAgentTests(SimpleTestCase):
         self.assertEqual(request['format'], SceneReview.model_json_schema())
         self.assertEqual(json.loads(request['messages'][1]['content']), {
             'scene_text': scene_text, 'user_prompt': prompt, 'context': context,
+            'scene_goal': 'Odnalezienie wyjścia',
         })
 
     def test_scene_review_with_only_advice_or_no_findings_passes(self):

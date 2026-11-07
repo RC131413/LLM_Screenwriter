@@ -1,9 +1,18 @@
 """Shared Pydantic contracts for generated scenes and editor blocks."""
 
 from functools import lru_cache
+import re
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+
+
+_DIALOGUE_LIST_PREFIX = re.compile(r'(?m)^([ \t]*)(?:\.[ \t]+|[•◦▪·][ \t]+)(?=[^\s.…•◦▪·])')
+
+
+def normalize_generated_dialogue(value: str) -> str:
+    """Remove stray AI list markers, preserving ellipses and actual punctuation."""
+    return _DIALOGUE_LIST_PREFIX.sub(r'\1', value)
 
 
 class GeneratedBlock(BaseModel):
@@ -23,7 +32,12 @@ class GeneratedSpeech(BaseModel):
     type: Literal['speech']
     speaker: str = Field(min_length=1, max_length=150, description='Wyłącznie nazwa postaci wypowiadającej słowa.')
     parenthetical: str | None = Field(max_length=120, description='Krótka, konkretna wskazówka aktorska (zwykle 1–4 słowa), gdy pomaga zagrać kwestię: intencja, pauza lub zmiana sposobu mówienia. Null, gdy zbędna. Bez mechanicznych powtórzeń i opisów czynności.')
-    spoken_text: str = Field(min_length=1, description='Wyłącznie słowa wypowiedziane na głos przez postać. Opis światła, otoczenia, ruchów i narracja należą do action.')
+    spoken_text: str = Field(min_length=1, description='Wyłącznie słowa wypowiedziane na głos przez postać, bez początkowej kropki lub punktora listy. Opis światła, otoczenia, ruchów i narracja należą do action.')
+
+    @field_validator('spoken_text')
+    @classmethod
+    def remove_list_prefix(cls, value: str) -> str:
+        return normalize_generated_dialogue(value)
 
 
 class GeneratedScene(BaseModel):

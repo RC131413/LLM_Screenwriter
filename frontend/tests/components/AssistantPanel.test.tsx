@@ -23,6 +23,20 @@ const props = () => {
 };
 
 describe('assistant using stored backend data', () => {
+  it('shows the saved draft and a warning when a critic revision exceeds the context window', async () => {
+    const variant = { ...variantFixture(), critic_feedback: 'Doprecyzuj reakcję Anny.',
+      critic_metadata: { review_status: 'context_limit_reached', needs_revision: true } };
+    interceptHttp(call => call.path === '/scenes/20/variants'
+      ? jsonResponse({ items: [variant], count: 1 }) : jsonResponse({ items: [], count: 0 }));
+    render(<AssistantPanel {...props()} />);
+
+    expect(await screen.findByText(/Automatyczna poprawka przekracza limit kontekstu/)).toHaveTextContent('tekst nadal wymaga poprawek');
+    expect(screen.getByText('Doprecyzuj reakcję Anny.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Podgląd tekstu' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Zastosuj wybrany wariant' })).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('hides a previous result after reloading a scene whose latest run was cancelled', async () => {
     interceptHttp(call => {
       if (call.path === '/scenes/20/variants') return jsonResponse({ items: [variantFixture()], count: 1 });

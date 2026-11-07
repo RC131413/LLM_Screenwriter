@@ -1,11 +1,14 @@
 import json
+from copy import deepcopy
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.test import Client
 
 from backend.agents.archivist import ArchivistAgent
+from backend.agents.critic import SceneReview
 from backend.api.models import AgentExecution, GenerationRun, Scene, SceneGenerationRequest, SceneVariant
-from backend.ollama import OLLAMA_MODEL, OllamaError
+from backend.ollama import OLLAMA_MODEL, OllamaError, OllamaOutputLimit
 
 from ._api_base import ApiTestCase
 from ._graph_transport import patch_writer
@@ -23,34 +26,112 @@ def generation_answer(*args, **kwargs):
 
 
 class SceneGenerationTests(ApiTestCase):
-    @patch_writer(side_effect=generation_answer)
-    def test_context_overflow_fails_cleanly_without_contacting_the_model_or_adding_history(self, generate):
-        prompt = '\n'.join(f'W kroku {number} Anna szuka wskazówki dotyczącej rodziny.' for number in range(350))
-        history_count = self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count']
-        before = SceneVariant.objects.count()
-        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
-            'user_prompt': prompt,
-        }), 422)
-
-        self.assertIn('kontekstu Bielika', response.json()['detail'])
-        generate.assert_not_called()
-        run = GenerationRun.objects.get(request__user_prompt=prompt)
-        self.assertEqual(run.status, 'failed')
-        self.assertEqual(list(run.agent_executions.values_list('node_name', 'status')), [('archivist', 'failed')])
-        self.assertEqual(SceneVariant.objects.count(), before)
-        self.assertEqual(self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count'], history_count)
+    @patch_writer(archive_response={
+        'characters': [], 'previous_scenes': [{'scene_number': 999, 'summary': 'Wymyślona scena.'}],
+        'continuity_facts': ['Wymyślony fakt.'], 'open_threads': [],
+    }, side_effect=generation_answer)
+    def test_invalid_archivist_history_uses_source_profiles_and_finishes_the_whole_api_flow(self, generate):
+        self.character.fears = 'Ogień'
+        self.character.save()
+        result = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Anna znajduje list.',
+        }), 201).json()
+        sent = json.loads(generate.call_args.args[0])['context']
+        self.assertEqual(sent['characters'][0]['name'], 'ANNA')
+        self.assertIn('Ogień', sent['characters'][0]['profile'])
+        self.assertEqual(sent['previous_scenes'], [])
+        self.assertEqual(sent['continuity_facts'], [])
+        run = GenerationRun.objects.get(pk=result['run_id'])
+        self.assertEqual(run.status, 'completed')
+        self.assertEqual(run.agent_executions.get(node_name='archivist').logs['model_calls'][0]['max_tokens'], 1024)
+        self.assertEqual(list(run.agent_executions.values_list('status', flat=True)), ['completed'] * 4)
         self.assertIsNone(self.send('get', '/generation/active').json())
 
+    @patch_writer(side_effect=[OllamaOutputLimit('{"blocks":[{"type":"action","text":"Anna'), GENERATED_SCENE])
+    def test_cut_scene_is_retried_then_only_the_complete_result_enters_variants_and_history(self, generate):
+        self.scene.location_heading = 'WN. DOM'
+        self.scene.save()
+        before = self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count']
+        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Anna znajduje list.',
+        }), 201).json()
+
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(response['generated_full_text'], 'ANNA\n\nZnalazłam list.')
+        run = GenerationRun.objects.get(pk=response['run_id'])
+        self.assertEqual(run.status, 'completed')
+        self.assertEqual(run.variants.count(), 1)
+        self.assertEqual(run.agent_executions.count(), 4)
+        self.assertEqual([call['attempt'] for call in run.agent_executions.get(node_name='scenarist').logs['model_calls']], [1, 2])
+        self.assertEqual(self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count'], before + 1)
+        self.assertIsNone(self.send('get', '/generation/active').json())
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.content_text, '')
+
+    @patch_writer(side_effect=OllamaOutputLimit('{"blocks":[{"type":"action","text":"Anna'))
+    def test_exhausted_output_recovery_never_saves_partial_text_or_adds_prompt_history(self, generate):
+        before = self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count']
+        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Próba niedokończonej sceny.',
+        }), 502)
+        self.assertEqual(generate.call_count, 2)
+        self.assertIn('dokończyć odpowiedzi', response.json()['detail'])
+        run = GenerationRun.objects.get(request__user_prompt='Próba niedokończonej sceny.')
+        self.assertEqual(run.status, 'failed')
+        self.assertFalse(run.variants.exists())
+        self.assertEqual(self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count'], before)
+        self.assertIsNone(self.send('get', '/generation/active').json())
+
+
     @patch_writer(side_effect=generation_answer)
-    def test_output_limit_larger_than_the_window_is_rejected_before_any_agent(self, generate):
+    def test_continuation_does_not_send_editor_state_or_duplicate_the_scene(self, generate):
+        blocks = [{'id': str(uuid4()), 'type': 'action', 'text': f'Anna przegląda dokument numer {number}.'}
+                  for number in range(21)]
+        text = '\n\n'.join(block['text'] for block in blocks)
+        metadata = {'blocks': blocks, 'status': 'draft', 'applied_variant': {
+            'run_id': self.generation_run.pk, 'block_ids': [str(uuid4()) for _ in range(100)],
+        }}
+        self.scene.content_text = text
+        self.scene.editor_metadata = metadata
+        self.scene.ai_metadata = {'scene_goal': 'Odnaleźć list ojca.', 'notes': 'Nie otwieraj listu.'}
+        self.scene.location_heading = 'WN. DOM'
+        self.scene.save()
+        original = deepcopy(metadata)
+
+        variant = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Kontynuuj, zbliżając się do celu sceny.',
+        }), 201).json()
+        sent = json.loads(generate.call_args.args[0])['context']
+        self.assertEqual(sent['scene']['content_text'], text)
+        self.assertEqual(sent['scene']['ai_metadata'], self.scene.ai_metadata)
+        self.assertNotIn('editor_metadata', sent['scene'])
+        self.assertNotIn('llm_preferences', sent)
+        generate.assert_called_once()
+
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.content_text, text)
+        self.assertEqual(self.scene.editor_metadata, original)
+        run = GenerationRun.objects.select_related('request').get(pk=variant['run_id'])
+        self.assertEqual(run.request.context_snapshot['scene']['editor_metadata'], original)
+        self.assertEqual(list(run.agent_executions.values_list('status', flat=True)), ['completed'] * 4)
+
+
+    @patch_writer(side_effect=generation_answer)
+    def test_output_preference_is_forwarded_without_local_token_budget_rejection(self, generate):
         response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
             'user_prompt': 'Anna znajduje klucz.', 'generation_parameters': {'max_tokens': 8192},
-        }), 422)
-        self.assertIn('Limit odpowiedzi', response.json()['detail'])
-        generate.assert_not_called()
+        }), 201)
+        self.assertIn('generated_full_text', response.json())
+        generate.assert_called_once()
+        options = generate.call_args.kwargs
+        self.assertEqual(options['num_ctx'], 4096)
+        self.assertEqual(options['max_tokens'], 8192)
         run = GenerationRun.objects.get(request__user_prompt='Anna znajduje klucz.')
-        self.assertEqual(run.status, 'failed')
-        self.assertFalse(run.agent_executions.exists())
+        self.assertEqual(run.status, 'completed')
+        self.assertEqual(run.request.generation_parameters['max_tokens'], 8192)
+        writer = run.agent_executions.get(node_name='scenarist')
+        self.assertEqual(writer.logs['model_calls'][0]['requested_max_tokens'], 8192)
+        self.assertNotIn('input_tokens', writer.logs['model_calls'][0])
 
     @patch_writer()
     def test_unintelligible_prompt_does_not_save_variants_or_enter_history(self, generate):

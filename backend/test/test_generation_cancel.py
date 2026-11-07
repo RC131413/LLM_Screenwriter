@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from backend.agents.archivist import ArchivedContext
 from backend.api.models import GenerationRun, SceneGenerationRequest, SceneVariant
-from backend.ollama import OllamaCancelled
+from backend.ollama import OllamaCancelled, OllamaOutputLimit
 from ._api_base import ApiTestCase
 from ._graph_transport import patch_writer
 
@@ -18,6 +18,22 @@ ANSWER = json.dumps({'blocks': [{'type': 'speech', 'speaker': 'ANNA', 'parenthet
 
 
 class GenerationCancellationTests(ApiTestCase):
+    @patch_writer()
+    def test_cancel_after_a_cut_response_stops_before_the_automatic_retry(self, generate):
+        payload = self.payload()
+
+        def cut_and_cancel(*args, **kwargs):
+            self.assert_status(self.cancel(payload), 200)
+            raise OllamaOutputLimit('{"blocks":[{"type":"action","text":"Anna')
+
+        generate.side_effect = cut_and_cancel
+        self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', payload), 409)
+        generate.assert_called_once()
+        run = GenerationRun.objects.get(run_metadata__generation_id=payload['generation_id'])
+        self.assertEqual(run.status, 'cancelled')
+        self.assertFalse(run.variants.exists())
+        self.assertIsNone(self.send('get', '/generation/active').json())
+
     @patch_writer(return_value=ANSWER)
     def test_cancellation_after_shared_archive_stops_all_variants(self, generate):
         payload = self.payload()

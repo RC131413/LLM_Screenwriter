@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 import httpx
 from django.test import SimpleTestCase
@@ -10,6 +11,14 @@ from backend.ollama import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 
 class CriticAgentTests(SimpleTestCase):
+    @patch('backend.ollama.generate', return_value=json.dumps({
+        'score': 8, 'feedback': 'Scena spójna.', 'findings': [],
+    }))
+    def test_default_critic_uses_the_shared_helper_configuration(self, generate):
+        review = CriticAgent().review_scene('Anna znajduje list.', user_prompt='Znajdź list.')
+        self.assertEqual(review.score, 8)
+        self.assertEqual(generate.call_args.kwargs['max_tokens'], 1024)
+
     def setUp(self):
         self.requests = []
         self.reply = None

@@ -9,6 +9,28 @@ from backend.ollama import OllamaError
 
 
 class ScreenplayFormatTests(SimpleTestCase):
+    def test_generated_dialogue_omits_stray_periods_and_bullets_on_each_line(self):
+        for prefix in ('. ', '• ', '◦ ', '▪ ', '· '):
+            with self.subTest(prefix=prefix):
+                blocks = generated_scene_blocks(json.dumps({'blocks': [{
+                    'type': 'speech', 'speaker': 'MACIEK', 'parenthetical': None,
+                    'spoken_text': f'{prefix}Dlaczego?\n\n{prefix}Czas odkryć prawdę.',
+                }]}))
+                self.assertEqual(blocks[-1]['text'], 'Dlaczego?\n\nCzas odkryć prawdę.')
+
+    def test_real_dialogue_punctuation_and_action_text_are_preserved(self):
+        lines = ['... Nie wiem...', '… Nie jestem pewien.', '. . . Czekaj.',
+                 '— Nie teraz.', 'To kosztuje 3.50 zł, np. za bilet.',
+                 '„.” to kropka.', 'Nie wiem. Naprawdę.']
+        for text in lines:
+            with self.subTest(text=text):
+                blocks = generated_scene_blocks(json.dumps({'blocks': [
+                    {'type': 'action', 'text': '. Napis widoczny na ścianie.'},
+                    {'type': 'speech', 'speaker': 'MACIEK', 'parenthetical': None, 'spoken_text': text},
+                ]}))
+                self.assertEqual(blocks[0]['text'], '. Napis widoczny na ścianie.')
+                self.assertEqual(blocks[-1]['text'], text)
+
     def test_generates_editor_ids_and_normalizes_each_supported_block_type(self):
         blocks = generated_scene_blocks(json.dumps({'blocks': [
             {'type': 'action', 'text': '  Anna otwiera kopertę.  '},

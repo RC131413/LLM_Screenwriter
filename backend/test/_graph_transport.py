@@ -5,7 +5,7 @@ from functools import wraps
 from unittest.mock import Mock, patch
 
 
-def patch_writer(**writer_options):
+def patch_writer(*, archive_response=None, **writer_options):
     def decorate(test):
         @wraps(test)
         def run(self):
@@ -20,6 +20,8 @@ def patch_writer(**writer_options):
                                        for card in context.get('characters', [])],
                         'previous_scenes': [], 'continuity_facts': [], 'open_threads': [],
                     }
+                    if archive_response is not None:
+                        answer = archive_response
                 elif 'beats' in properties:
                     answer = {'beats': ['Rozwiń wydarzenie w bieżącej scenie.']}
                 elif 'score' in properties:

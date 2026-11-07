@@ -3,7 +3,6 @@ from copy import deepcopy
 
 import httpx
 from django.test import SimpleTestCase
-from langchain_core.exceptions import OutputParserException
 from langchain_ollama import ChatOllama
 
 from backend.agents.archivist import ArchivedContext, ArchivistAgent
@@ -121,17 +120,21 @@ class ArchivistAgentTests(SimpleTestCase):
         self.assertEqual(result.model_dump(), {**self.reply, 'characters': []})
         self.assertEqual(len(self.requests), 1)
 
-    def test_rejects_scene_outside_supplied_history(self):
+    def test_scene_outside_supplied_history_falls_back_to_the_actual_source(self):
         self.reply['previous_scenes'] = [{'scene_number': 3, 'summary': 'Marta odzyskuje bilet.'}]
         context = {
             'scene': {'scene_number': 3},
             'previous_scenes': [{'scene_number': 2, 'content_text': 'Marta gubi bilet.'}],
         }
 
-        with self.assertRaisesRegex(ValueError, 'scenę spoza przekazanego kontekstu'):
-            self.archivist.prepare_context(user_prompt='Kontynuuj.', context=context)
+        original = deepcopy(context)
+        result = self.archivist.prepare_context(user_prompt='Kontynuuj.', context=context)
+        self.assertEqual(result.previous_scenes[0].scene_number, 2)
+        self.assertEqual(result.previous_scenes[0].summary, 'Marta gubi bilet.')
+        self.assertEqual(result.continuity_facts, [])
+        self.assertEqual(context, original)
 
-    def test_rejects_invalid_structured_output(self):
+    def test_invalid_structured_output_falls_back_to_supplied_data(self):
         empty_archive = self.reply.copy()
         for fields in (
             {'characters': [{'name': 'Marta', 'profile': ' '}]},
@@ -140,5 +143,5 @@ class ArchivistAgentTests(SimpleTestCase):
         ):
             with self.subTest(fields=fields):
                 self.reply = {**empty_archive, **fields}
-                with self.assertRaises(OutputParserException):
-                    self.archivist.prepare_context(user_prompt='Kontynuuj.', context={'project': {'id': 1}})
+                result = self.archivist.prepare_context(user_prompt='Kontynuuj.', context={'project': {'id': 1}})
+                self.assertEqual(result.model_dump(), empty_archive)

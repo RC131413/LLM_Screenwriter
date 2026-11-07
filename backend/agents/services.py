@@ -1,6 +1,7 @@
 """Run the scene workflow against a Django snapshot and persist its final variant."""
 
 from contextlib import closing
+from threading import get_ident
 from time import perf_counter
 
 from django.core.exceptions import ValidationError
@@ -22,7 +23,6 @@ from backend.ollama import OLLAMA_BASE_URL, OLLAMA_MODEL, OllamaCancelled, Ollam
 
 from ._model import CancellableChatOllama
 from .archivist import ArchivedContext
-from .context_budget import ContextWindowPolicy
 from .graph import SceneGraphState, build_scene_graph, scene_graph
 from .scenarist import SCENE_WRITE_TIMEOUT
 
@@ -151,6 +151,15 @@ def _finish_agent(execution, status, error_message=''):
     )
 
 
+def _record_model_call(run, metadata):
+    execution = run.agent_executions.filter(status='running').last()
+    if execution is not None:
+        calls = execution.logs.get('model_calls', [])
+        AgentExecution.objects.filter(pk=execution.pk).update(
+            logs=execution.logs | {'model_calls': [*calls, metadata]},
+        )
+
+
 def _run_workflow(graph, run, *, context, number, archived_context: ArchivedContext | None = None) -> SceneGraphState:
     state: SceneGraphState = {'user_prompt': run.request.user_prompt, 'context': context}
     if archived_context is not None:
@@ -176,6 +185,10 @@ def _run_workflow(graph, run, *, context, number, archived_context: ArchivedCont
             _finish_agent(execution, 'cancelled', str(cancelled))
             raise cancelled from error
         if isinstance(error, (OutputParserException, ValueError)):
+            stored_logs = AgentExecution.objects.values_list('logs', flat=True).get(pk=execution.pk)
+            AgentExecution.objects.filter(pk=execution.pk).update(logs=stored_logs | {
+                'failure_type': type(error).__name__, 'failure_detail': str(error)[:2000],
+            })
             failure = OllamaError(f'Nieprawidłowy format odpowiedzi na etapie „{execution.agent_name}”. Spróbuj ponownie.')
             _finish_agent(execution, 'failed', str(failure))
             raise failure from error
@@ -188,14 +201,20 @@ def generate_variants_for_run(run: GenerationRun, *, user: User, variant_count: 
     """Execute a prepared API run and commit all variants together."""
     started = perf_counter()
     try:
+        request_thread = get_ident()
+
         def is_cancelled():
+            # The transport's watcher owns/closes its thread-local connection.
+            # Between retries the model checks on the request thread instead;
+            # never close that connection (it may be inside a transaction).
+            if get_ident() == request_thread:
+                return not GenerationRun.objects.filter(pk=run.pk, status='running').exists()
             return generation_is_cancelled(run.pk)
 
         parameters = run.request.generation_parameters
-        policy = ContextWindowPolicy(max_tokens=max(1024, parameters['max_tokens']))
         model_settings = {
             'model': OLLAMA_MODEL, 'base_url': OLLAMA_BASE_URL, 'is_cancelled': is_cancelled,
-            'context_selector': policy.apply,
+            'context_observer': lambda metadata: _record_model_call(run, metadata),
         }
         model = CancellableChatOllama(**model_settings, temperature=0, num_predict=1024)
         writer = CancellableChatOllama(

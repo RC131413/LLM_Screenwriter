@@ -19,6 +19,30 @@ class SceneCompositionApiTests(ApiTestCase):
         self.character.name = 'MAĆKO'
         self.character.save(update_fields=['name'])
 
+    @patch_writer(return_value=json.dumps({'blocks': [{
+        'type': 'speech', 'speaker': 'MAĆKO', 'parenthetical': None,
+        'spoken_text': '. Dlaczego?\n. Czas odkryć prawdę.',
+    }]}))
+    def test_generated_dialogue_is_cleaned_before_saving_and_applying_without_changing_manual_text(self, generate):
+        old_blocks = [
+            {'id': 'speaker', 'type': 'character', 'text': 'MAĆKO'},
+            {'id': 'manual', 'type': 'dialogue', 'text': '. Ręcznie wpisana kwestia...'},
+        ]
+        self.scene.location_heading = 'WN. CHATA'
+        self.scene.content_text = 'MAĆKO\n\n. Ręcznie wpisana kwestia...'
+        self.scene.editor_metadata = {'blocks': old_blocks}
+        self.scene.save()
+        variant = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Dodaj następny dialog.',
+        }), 201).json()
+        self.assertEqual(variant['generated_full_text'], 'MAĆKO\n\nDlaczego?\nCzas odkryć prawdę.')
+        self.assertEqual(variant['critic_metadata']['blocks'][-1]['text'], 'Dlaczego?\nCzas odkryć prawdę.')
+        self.assert_status(self.send('post', f'/variants/{variant["id"]}/select', {'apply_to_scene': True}), 200)
+        self.scene.refresh_from_db()
+        self.assertEqual(self.scene.editor_metadata['blocks'][:2], old_blocks)
+        self.assertEqual(self.scene.editor_metadata['blocks'][-1]['text'], 'Dlaczego?\nCzas odkryć prawdę.')
+        generate.assert_called_once()
+
     @patch_writer(return_value=ACTION_ONLY)
     def test_generic_request_accepts_action_only_without_retry_and_applies_it(self, generate):
         before = (SceneGenerationRequest.objects.count(), SceneVariant.objects.count())

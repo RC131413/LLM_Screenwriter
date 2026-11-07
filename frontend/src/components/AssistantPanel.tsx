@@ -128,7 +128,10 @@ export function AssistantPanel({ project, scene, generation, onSelect, onChange,
         <section className="panel-section variants-section"><div className="prompt-field-heading"><span className="eyebrow">ZAPISANE WARIANTY</span><IconButton label="Odśwież warianty i przebieg" title="Pobierz ponownie ostatnią serię wariantów i status." disabled={loading || pending || generating} onClick={() => setVersion(value => value + 1)}><RotateCcw size={15} /></IconButton></div>
           {!loading && !variants.length && <p className="muted small">Brak wariantów dla tej sceny.</p>}
           <div className="variant-list">{variants.map(variant => <div key={variant.id} className={`variant-item ${selected === variant.id ? 'selected' : ''}`}><label><input type="radio" name="scene-variant" disabled={pending || generating} checked={selected === variant.id} onChange={() => void chooseVariant(variant.id)} /><strong>{variant.title || `Wariant ${variant.variant_number}`}</strong></label>
-            <p>{variant.critic_feedback || 'Brak oceny krytyka.'}</p>{variant.critic_metadata.review_status === 'revision_limit_reached' && <p className="small">Wariant nadal wymaga poprawek.</p>}{variant.critic_score !== null && <small>Ocena: {variant.critic_score}</small>}<button className="text-button" onClick={() => setPreview(variant)}>Podgląd tekstu<ChevronRight size={13} /></button>
+            <p>{variant.critic_feedback || 'Brak oceny krytyka.'}</p>
+            {variant.critic_metadata.review_status === 'revision_limit_reached' && <p className="small">Wariant nadal wymaga poprawek.</p>}
+            {variant.critic_metadata.review_status === 'context_limit_reached' && <p className="small">Automatyczna poprawka przekracza limit kontekstu. Zachowano wariant i uwagi Krytyka; tekst nadal wymaga poprawek.</p>}
+            {variant.critic_score !== null && <small>Ocena: {variant.critic_score}</small>}<button className="text-button" onClick={() => setPreview(variant)}>Podgląd tekstu<ChevronRight size={13} /></button>
           </div>)}</div>
           {variants.length > 0 && <button className="button primary full-width" title="Dopisz wygenerowany tekst na końcu sceny" disabled={!chosen || pending || generating} onClick={() => void apply()}><Check size={15} />{pending ? 'Zapisywanie…' : 'Zastosuj wybrany wariant'}</button>}
         </section>

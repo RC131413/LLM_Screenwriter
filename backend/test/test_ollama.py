@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from backend.ollama import OLLAMA_GPU_LAYERS, OLLAMA_MODEL, OllamaCancelled, OllamaError, generate
+from backend.ollama import OLLAMA_GPU_LAYERS, OLLAMA_MODEL, OllamaCancelled, OllamaError, OllamaOutputLimit, generate
 
 
 class Reply(BytesIO):
@@ -89,10 +89,12 @@ class OllamaClientTests(SimpleTestCase):
 
     @patch('backend.ollama.HTTPConnection')
     def test_token_limit_is_not_reported_as_complete_structured_scene(self, transport):
-        transport.return_value.getresponse.return_value = complete('{}', done_reason='length')
-        with self.assertRaises(OllamaError) as caught:
+        partial = '{"blocks":[{"type":"action","text":"Anna'
+        transport.return_value.getresponse.return_value = complete(partial, done_reason='length')
+        with self.assertRaises(OllamaOutputLimit) as caught:
             generate('Test', output_schema={'type': 'object'})
-        self.assertIn('limit tokenów', str(caught.exception))
+        self.assertEqual(caught.exception.partial_text, partial)
+        self.assertNotIn(partial, str(caught.exception))
 
     @patch('backend.ollama.HTTPConnection')
     def test_rejects_invalid_prompts_without_http_request(self, transport):

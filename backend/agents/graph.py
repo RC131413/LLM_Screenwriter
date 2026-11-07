@@ -55,12 +55,15 @@ def _writing_context(state: SceneGraphState) -> dict[str, Any]:
     return source | archived
 
 
-def build_scene_graph(*, model: ChatOllama | None = None, writing_model: ChatOllama | None = None):
+def build_scene_graph(
+    *, model: ChatOllama | None = None, writing_model: ChatOllama | None = None,
+    critic_model: ChatOllama | None = None,
+):
     """Compile the writing workflow for a caller-supplied context snapshot."""
     archivist = ArchivistAgent(model)
     director = DirectorAgent(model)
     scenarist = ScenaristAgent(writing_model or model)
-    critic = CriticAgent(model)
+    critic = CriticAgent(critic_model or model)
 
     def archive(state: SceneGraphState) -> dict[str, ArchivedContext]:
         return {'archived_context': archivist.prepare_context(

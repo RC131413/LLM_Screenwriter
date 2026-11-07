@@ -8,7 +8,6 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 from langsmith import tracing_context
 
-from backend.llm_config import OLLAMA_CONFIG
 from backend.api.screenplay import blocks_text, can_generate_heading, compose_generated_continuation
 from backend.screenplay_schemas import canonical_speaker_name, generated_scene_schema
 
@@ -16,7 +15,7 @@ from ._model import create_local_chat_model
 from .director import ScenePlan
 
 
-SCENE_WRITE_TIMEOUT = OLLAMA_CONFIG.scene_timeout
+SCENE_WRITE_TIMEOUT = 300
 
 
 class SceneRevision(TypedDict):
@@ -34,24 +33,18 @@ class SceneDraft:
 
 WRITE_SCENE = ChatPromptTemplate.from_messages([
     ('system',
-     'Jesteś Scenarzystą. Napisz po polsku fragment jednej sceny filmowej według polecenia autora '
-     'i planu Reżysera. Zrealizuj każdy punkt w podanej kolejności. Pokaż wynikające z niego '
-     'zdarzenie w akcji lub dialogu, bez przepisywania punktów i bez dopisywania kolejnego wątku. '
-     'Korzystaj z profili postaci i faktów Archiwisty. Zachowaj stan wiedzy każdej postaci. '
-     'Dla każdej wypowiedzi dopasuj słownictwo, rytm zdań i sposób zwracania się do innych do '
-     'voice_profile lub opisu mowy danej postaci. Nie mieszaj głosów bohaterów. '
-     'Jeśli plan przewiduje rozmowę, napisz faktycznie wypowiadane kwestie. Jeśli akcja wystarcza, '
-     'scena może być niema. Zwróć obiekt JSON z listą blocks. Każdy blok akcji ma type równy action '
-     'oraz text w czasie teraźniejszym. Blok wypowiedzi ma type równy speech, nazwę postaci w speaker, '
-     'jej kwestię w spoken_text i wskazówkę aktorską w parenthetical. {speaker_instruction}'
-     'Jeśli wskazówka jest zbędna '
-     'lub preferencje autora jej nie dopuszczają, wpisz w parenthetical null. '
-     'Pozostań w miejscu i czasie bieżącej sceny. Przy kontynuacji zacznij po ostatnim zapisanym '
-     'zdarzeniu. W blocks nie umieszczaj nagłówków, przejść, numerów punktów ani komentarzy. '
-     'Jeśli otrzymasz revision, zwróć kompletną poprawioną wersję previous_draft. '
-     'Zastosuj required_changes, zachowaj poprawne fragmenty i plan. '
-     'Nie dopisuj dalszego ciągu do poprzedniego wariantu i nie przepisuj tekstu zapisanego w context.scene. '
-     'Uwzględnij wariant podejścia, preferowany ton dialogu i styl opisu akcji z context. '
+     'Jesteś Scenarzystą. Zrealizuj po polsku user_prompt i wszystkie beats w kolejności: '
+     'jedna scena, bez nowych wątków i przepisywania planu. Zachowaj fakty Archiwisty, profile i wiedzę postaci. '
+     'Głosy (słownictwo, rytm, zwroty) według voice_profile lub opisu mowy; nie mieszaj ich. '
+     'action: widoczne działania, trzecia osoba, czas teraźniejszy. '
+     'speech: słowa wypowiadane na głos, bez początkowej kropki, punktora, numeracji ani myślnika dialogowego. '
+     'Dialog opcjonalny, konieczny przy rozmowie w planie. '
+     'parenthetical: krótka potrzebna wskazówka lub null; respektuj preferencje autora. '
+     '{speaker_instruction}'
+     'Kontynuuj context.scene bez powtórzeń, w tym samym miejscu i czasie. '
+     'Bloki bez nagłówków, przejść, numeracji i komentarzy. '
+     '{revision_instruction}'
+     'Uwzględnij variant_approach, ton dialogów i styl akcji z context. '
      '{heading_instruction}{format_instruction}'),
     ('human', '{payload}'),
 ])
@@ -98,11 +91,9 @@ class ScenaristAgent:
         if revision is not None:
             payload['revision'] = revision
         speaker_instruction = (
-            'Dozwolone etykiety speaker z przypisanej obsady: '
+            'Etykiety speaker wyłącznie: '
             f'{json.dumps(speaker_names, ensure_ascii=False)}. '
-            'Wybieraj je dokładnie, bez nazw zastępczych, ról i określeń pokrewieństwa. '
-            'Te określenia mogą występować w akcji i spoken_text. '
-            'Nie każda przypisana postać musi mówić. '
+            'Role i pokrewieństwo tylko w akcji lub spoken_text. '
             if speaker_names else ''
         )
         heading_instruction = (
@@ -115,6 +106,11 @@ class ScenaristAgent:
                 'payload': json.dumps(payload, ensure_ascii=False),
                 'speaker_instruction': speaker_instruction,
                 'heading_instruction': heading_instruction,
+                'revision_instruction': (
+                    'Dla revision popraw cały previous_draft według required_changes i feedback; '
+                    'zachowaj dobre fragmenty i plan, nie dopisuj kontynuacji. '
+                    if revision is not None else ''
+                ),
                 'format_instruction': f'\nPOPRAW FORMAT: {format_feedback}' if format_feedback else '',
             })
 

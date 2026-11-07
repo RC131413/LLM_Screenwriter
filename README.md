@@ -138,19 +138,21 @@ keyword arguments control generation. The scene endpoint uses saved AI preferenc
 The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
 Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
 The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
-Hardware settings are read from the project's `.env` at startup; see `.env.example`.
-Defaults preserve the development configuration: `OLLAMA_GPU_LAYERS=99`,
-`OLLAMA_AGENT_BATCH_SIZE=64` for agents and `OLLAMA_BATCH_SIZE=128` for direct calls.
-Set GPU layers to `auto` to let Ollama choose placement, `0` for CPU-only inference,
-or a positive layer count for GPU offload. Context windows, safety margin, server
-URL and socket timeouts are configurable too. Restart Django after editing `.env`;
-shell/container environment variables take precedence. The model and tokenizer
-remain fixed to Bielik. On the development RTX 3060 Ti (8 GB), `ollama ps` verified
-`100% GPU` with the original 4096-token context, compared to automatic 83% GPU /
-17% CPU loading. GPU fit depends on free VRAM; `ollama ps` reports model placement,
-as described in [Ollama's FAQ](https://docs.ollama.com/faq#how-can-i-tell-if-my-model-was-loaded-onto-the-gpu).
+The local client uses a fixed 4096-token context, GPU offload (`num_gpu=99`),
+agent batch size 64 and direct-call batch size 128. These are ordinary Ollama
+options in `backend/ollama.py`; the experimental `.env` hardware configuration,
+local token counter and adaptive response budgeting have been removed.
+The writer starts with the user's saved output preference; other agents use
+1024 output tokens. A token-truncated structured answer gets one retry with
+twice the initial output allowance and the same JSON schema, without the
+experimental paragraph/string caps. Cancellation remains available between attempts.
+Incomplete output is never stored or applied to the scene.
 Scene generation supplies a JSON schema through Ollama's `format` field, following
 its [structured-output API](https://docs.ollama.com/capabilities/structured-outputs).
+Generated speech is normalized before review and persistence: a stray leading
+`. ` or bullet marker is removed from dialogue lines. Ellipses, internal punctuation
+and manually authored scene blocks are preserved. This is local text formatting,
+not another model request or a new rejection condition.
 
 With Ollama installed and running, download the model once:
 
@@ -178,23 +180,17 @@ additional variants start at the director with that context. A new request alway
 prepares a fresh archive. Optional `generation_parameters` sets the writer's
 `temperature` and `max_tokens`. Inference runs outside the database transaction.
 
-Before each model call, `backend/agents/context_budget.py` counts message content
-with the bundled Bielik tokenizer, adds a conservative chat-template allowance,
-the complete output limit and a margin (`OLLAMA_CONTEXT_MARGIN`, default 128).
-Allowed windows come from `OLLAMA_CONTEXT_WINDOWS` (default `2048,4096`).
-The API shares a non-decreasing window across all agents and variants in
-one request, avoiding repeated model reloads when small and large inputs
-alternate. A 2048-token writer output limit starts the run at 4096.
+The outgoing JSON omits editor/undo storage and duplicated editor blocks while
+preserving the complete saved scene, goals, notes and character data. No local
+token preflight rejects the request or changes the response budget.
 
-If input does not fit, only the outgoing JSON copy is compacted: technical IDs
-are removed and an existing history summary can replace its raw source text.
-Author instructions, the current scene, character profiles, goals and notes are
-not truncated. If the material still does not fit, generation fails with HTTP
-422 before that inference call. The output limit is never silently reduced.
-There is no extra model request or runtime tokenizer download. The local
-`tokenizers` package is installed through `requirements.txt`; its data/license
-are bundled in `backend/agents/data/` and included by the existing Docker COPY.
-See `docs/context-budget-validation.md` for measurements and limitations.
+The archivist normally summarizes the supplied material once for the entire
+batch. If its structured answer is invalid or refers to scenes outside that
+material, it passes the original supplied profiles and history instead. It does
+not replace them with invented summaries, and the rest of the graph proceeds.
+This recovery is noted in the server log. Connection failures and cancellation
+still propagate normally. Agent logs record model-call
+options and any parser failure details; they do not control generation.
 
 The endpoint returns HTTP 201 with a `VariantOut` object or a list when
 `variant_count` is specified. It saves the batch together with the critic's

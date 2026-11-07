@@ -7,14 +7,13 @@ from socket import SHUT_RDWR
 from threading import Event, Thread
 from urllib.parse import urlsplit
 
-from backend.llm_config import OLLAMA_CONFIG
-
-
-OLLAMA_BASE_URL = OLLAMA_CONFIG.base_url
+OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
 OLLAMA_MODEL = 'SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M'
-OLLAMA_TIMEOUT = OLLAMA_CONFIG.timeout
-OLLAMA_GPU_LAYERS = OLLAMA_CONFIG.gpu_layers
-OLLAMA_BATCH_SIZE = OLLAMA_CONFIG.batch_size
+OLLAMA_TIMEOUT = 120
+OLLAMA_GPU_LAYERS = 99
+OLLAMA_BATCH_SIZE = 128
+OLLAMA_AGENT_BATCH_SIZE = 64
+OLLAMA_CONTEXT_SIZE = 4096
 
 
 class OllamaError(RuntimeError):
@@ -26,6 +25,14 @@ class OllamaError(RuntimeError):
 class OllamaCancelled(OllamaError):
     def __init__(self):
         super().__init__('Generowanie zostało anulowane.', status_code=409)
+
+
+class OllamaOutputLimit(OllamaError):
+    """A privately buffered structured response stopped before its closing token."""
+
+    def __init__(self, partial_text: str):
+        super().__init__('Model nie dokończył odpowiedzi w dostępnym budżecie generowania.')
+        self.partial_text = partial_text
 
 
 def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = OLLAMA_TIMEOUT,
@@ -120,9 +127,9 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
                 parts.append(fragment)
                 if data.get('done') is True:
                     check_cancelled()
-                    if output_schema is not None and data.get('done_reason') == 'length':
-                        raise OllamaError('Model osiągnął limit tokenów przed ukończeniem sceny. Zwiększ limit w preferencjach AI.')
                     text = ''.join(parts)
+                    if output_schema is not None and data.get('done_reason') == 'length':
+                        raise OllamaOutputLimit(text)
                     if not text.strip():
                         raise OllamaError('Ollama nie zwróciła tekstu odpowiedzi modelu.')
                     return text

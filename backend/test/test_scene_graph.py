@@ -7,7 +7,8 @@ from langchain_ollama import ChatOllama
 
 from backend.agents.archivist import ArchivedContext
 from backend.agents.graph import MAX_REVISIONS, build_scene_graph
-from backend.ollama import OLLAMA_MODEL
+from backend.agents.scenarist import SceneDraft
+from backend.ollama import OLLAMA_MODEL, OllamaError
 
 
 ARCHIVE = {'characters': [], 'previous_scenes': [], 'continuity_facts': [], 'open_threads': []}
@@ -145,3 +146,13 @@ class SceneGraphTests(SimpleTestCase):
         self.assertEqual(result['scene_text'], replies[-2]['blocks'][0]['text'])
         self.assertEqual(self.requests[-2]['revision']['previous_draft'], replies[-4]['blocks'][0]['text'])
         self.assertEqual(self.requests[-2]['revision']['feedback'], replies[-3]['feedback'])
+
+
+    def test_model_failure_during_revision_is_not_disguised_as_a_context_warning(self):
+        with patch('backend.agents.graph.ScenaristAgent.write_scene_draft', side_effect=[
+            SceneDraft(text='Marta szuka.', blocks=[{'id': 'a', 'type': 'action', 'text': 'Marta szuka.'}],
+                       heading=None),
+            OllamaError('Ollama jest niedostępna.'),
+        ]):
+            with self.assertRaisesRegex(OllamaError, 'niedostępna'):
+                self.run_graph([{'score': 5, 'feedback': 'Brakuje odkrycia.', 'findings': [REQUIRED_CHANGE]}])

@@ -24,6 +24,35 @@ def generation_answer(*args, **kwargs):
 
 
 class SceneGenerationTests(ApiTestCase):
+    @patch_writer(side_effect=generation_answer)
+    def test_context_overflow_fails_cleanly_without_contacting_the_model_or_adding_history(self, generate):
+        prompt = '\n'.join(f'W kroku {number} Anna szuka wskazówki dotyczącej rodziny.' for number in range(350))
+        history_count = self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count']
+        before = SceneVariant.objects.count()
+        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': prompt,
+        }), 422)
+
+        self.assertIn('kontekstu Bielika', response.json()['detail'])
+        generate.assert_not_called()
+        run = GenerationRun.objects.get(request__user_prompt=prompt)
+        self.assertEqual(run.status, 'failed')
+        self.assertEqual(list(run.agent_executions.values_list('node_name', 'status')), [('archivist', 'failed')])
+        self.assertEqual(SceneVariant.objects.count(), before)
+        self.assertEqual(self.send('get', f'/scenes/{self.scene.pk}/prompts').json()['count'], history_count)
+        self.assertIsNone(self.send('get', '/generation/active').json())
+
+    @patch_writer(side_effect=generation_answer)
+    def test_output_limit_larger_than_the_window_is_rejected_before_any_agent(self, generate):
+        response = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Anna znajduje klucz.', 'generation_parameters': {'max_tokens': 8192},
+        }), 422)
+        self.assertIn('Limit odpowiedzi', response.json()['detail'])
+        generate.assert_not_called()
+        run = GenerationRun.objects.get(request__user_prompt='Anna znajduje klucz.')
+        self.assertEqual(run.status, 'failed')
+        self.assertFalse(run.agent_executions.exists())
+
     @patch_writer()
     def test_unintelligible_prompt_does_not_save_variants_or_enter_history(self, generate):
         path = f'/scenes/{self.scene.pk}/generate'

@@ -22,6 +22,7 @@ from backend.ollama import OLLAMA_BASE_URL, OLLAMA_MODEL, OllamaCancelled, Ollam
 
 from ._model import CancellableChatOllama
 from .archivist import ArchivedContext
+from .context_budget import ContextWindowPolicy
 from .graph import SceneGraphState, build_scene_graph, scene_graph
 from .scenarist import SCENE_WRITE_TIMEOUT
 
@@ -190,9 +191,13 @@ def generate_variants_for_run(run: GenerationRun, *, user: User, variant_count: 
         def is_cancelled():
             return generation_is_cancelled(run.pk)
 
-        model_settings = {'model': OLLAMA_MODEL, 'base_url': OLLAMA_BASE_URL, 'is_cancelled': is_cancelled}
-        model = CancellableChatOllama(**model_settings, temperature=0, num_predict=1024)
         parameters = run.request.generation_parameters
+        policy = ContextWindowPolicy(max_tokens=max(1024, parameters['max_tokens']))
+        model_settings = {
+            'model': OLLAMA_MODEL, 'base_url': OLLAMA_BASE_URL, 'is_cancelled': is_cancelled,
+            'context_selector': policy.apply,
+        }
+        model = CancellableChatOllama(**model_settings, temperature=0, num_predict=1024)
         writer = CancellableChatOllama(
             **model_settings, temperature=parameters['temperature'], num_predict=parameters['max_tokens'],
             request_timeout=SCENE_WRITE_TIMEOUT,

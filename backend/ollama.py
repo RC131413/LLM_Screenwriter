@@ -29,10 +29,13 @@ class OllamaCancelled(OllamaError):
 def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = OLLAMA_TIMEOUT,
              temperature: float = 0.7, max_tokens: int = 128, output_schema: dict | None = None,
              is_cancelled: Callable[[], bool] | None = None,
-             messages: list[dict[str, str]] | None = None, num_batch: int = OLLAMA_BATCH_SIZE) -> str:
+             messages: list[dict[str, str]] | None = None, num_batch: int = OLLAMA_BATCH_SIZE,
+             num_ctx: int | None = None) -> str:
     """Buffer tokens privately; closing the upstream socket cancels Ollama's request."""
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError('Prompt musi być niepustym tekstem.')
+    if num_ctx is not None and (isinstance(num_ctx, bool) or not isinstance(num_ctx, int) or num_ctx < 1):
+        raise ValueError('Rozmiar kontekstu musi być dodatnią liczbą tokenów.')
     address = urlsplit(base_url)
     if address.scheme not in {'http', 'https'} or not address.hostname:
         raise ValueError('Nieprawidłowy adres Ollamy.')
@@ -43,6 +46,8 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
         'options': {'num_predict': max_tokens, 'temperature': temperature,
                     'num_gpu': OLLAMA_GPU_LAYERS, 'num_batch': num_batch},
     }
+    if num_ctx is not None:
+        payload['options']['num_ctx'] = num_ctx
     if messages is None:
         payload['prompt'] = prompt
     else:

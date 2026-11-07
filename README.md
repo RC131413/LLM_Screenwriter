@@ -173,6 +173,23 @@ additional variants start at the director with that context. A new request alway
 prepares a fresh archive. Optional `generation_parameters` sets the writer's
 `temperature` and `max_tokens`. Inference runs outside the database transaction.
 
+Before each model call, `backend/agents/context_budget.py` counts message content
+with the bundled Bielik tokenizer, adds a conservative chat-template allowance,
+the complete output limit and a 128-token margin. Allowed windows are 2048 and
+4096. The API shares a non-decreasing window across all agents and variants in
+one request, avoiding repeated model reloads when small and large inputs
+alternate. A 2048-token writer output limit starts the run at 4096.
+
+If input does not fit, only the outgoing JSON copy is compacted: technical IDs
+are removed and an existing history summary can replace its raw source text.
+Author instructions, the current scene, character profiles, goals and notes are
+not truncated. If the material still does not fit, generation fails with HTTP
+422 before that inference call. The output limit is never silently reduced.
+There is no extra model request or runtime tokenizer download. The local
+`tokenizers` package is installed through `requirements.txt`; its data/license
+are bundled in `backend/agents/data/` and included by the existing Docker COPY.
+See `docs/context-budget-validation.md` for measurements and limitations.
+
 The endpoint returns HTTP 201 with a `VariantOut` object or a list when
 `variant_count` is specified. It saves the batch together with the critic's
 score, feedback and revision status for each variant. The run records the agent

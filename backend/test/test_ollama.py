@@ -21,6 +21,21 @@ def complete(text='OK', **extra):
 
 class OllamaClientTests(SimpleTestCase):
     @patch('backend.ollama.HTTPConnection')
+    def test_sends_selected_context_size_separately_from_the_output_limit(self, transport):
+        transport.return_value.getresponse.return_value = complete()
+        generate('Anna szuka klucza.', max_tokens=512, num_ctx=2048)
+        options = json.loads(transport.return_value.request.call_args.kwargs['body'])['options']
+        self.assertEqual(options['num_ctx'], 2048)
+        self.assertEqual(options['num_predict'], 512)
+
+    @patch('backend.ollama.HTTPConnection')
+    def test_invalid_context_size_is_rejected_before_http(self, transport):
+        for num_ctx in (0, -1, True, 2048.5):
+            with self.subTest(num_ctx=num_ctx), self.assertRaises(ValueError):
+                generate('Anna szuka klucza.', num_ctx=num_ctx)
+        transport.assert_not_called()
+
+    @patch('backend.ollama.HTTPConnection')
     def test_streams_chat_responses_with_roles_and_a_small_batch(self, transport):
         messages = [{'role': 'system', 'content': 'Oceń scenę.'}, {'role': 'user', 'content': 'Scena.'}]
         chunks = [

@@ -58,7 +58,7 @@ WRITE_SCENE = ChatPromptTemplate.from_messages([
 class ScenaristAgent:
     def __init__(self, model: ChatOllama | None = None):
         if model is None:
-            model = create_local_chat_model(timeout=SCENE_WRITE_TIMEOUT)
+            model = create_local_chat_model(timeout=SCENE_WRITE_TIMEOUT, max_tokens=2048)
         self._write_body = WRITE_SCENE | model.with_structured_output(GeneratedScene, method='json_schema')
         self._write_with_heading = WRITE_SCENE | model.with_structured_output(
             GeneratedSceneWithHeading, method='json_schema',

@@ -8,11 +8,12 @@ from time import perf_counter
 
 from tokenizers import Tokenizer
 
+from backend.llm_config import OLLAMA_CONFIG
 from backend.ollama import OllamaError
 
 
-CONTEXT_WINDOWS = (2048, 4096)
-CONTEXT_MARGIN = 128
+CONTEXT_WINDOWS = OLLAMA_CONFIG.context_windows
+CONTEXT_MARGIN = OLLAMA_CONFIG.context_margin
 # Conservative allowance for the fixed model's chat template, measured separately
 # from message contents. Its local Ollama template currently adds about 81 tokens
 # for a system/user pair; the allowance here is 160, plus CONTEXT_MARGIN.

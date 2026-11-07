@@ -131,16 +131,21 @@ running it again: `docker compose up -d --build db_setup`.
 
 `backend/ollama.py` exposes `generate(prompt: str) -> str`. It sends UTF-8 JSON to
 `http://127.0.0.1:11434/api/generate` using Python's standard library, with
-an internally buffered NDJSON stream and a 120-second socket timeout. Partial
+an internally buffered NDJSON stream and a socket timeout (120 seconds by default). Partial
 tokens are never sent to the frontend. Optional `temperature` and `max_tokens`
 keyword arguments control generation. The scene endpoint uses saved AI preferences
 (by default temperature 0.7 and 2048 output tokens), unless the request overrides them.
 The model is fixed to `SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M`, the concrete
 Ollama identifier for [SpeakLeash's Bielik 11B model](https://ollama.com/SpeakLeash/bielik-11b-v2.3-instruct/tags).
 The request follows [Ollama's generate API](https://docs.ollama.com/api/generate).
-Requests explicitly set `num_gpu: 99` to offload all layers of the fixed Bielik
-model to the GPU and `num_batch: 128` to limit prompt-processing buffers on the
-8 GB development GPU. On the development RTX 3060 Ti (8 GB), `ollama ps` verified
+Hardware settings are read from the project's `.env` at startup; see `.env.example`.
+Defaults preserve the development configuration: `OLLAMA_GPU_LAYERS=99`,
+`OLLAMA_AGENT_BATCH_SIZE=64` for agents and `OLLAMA_BATCH_SIZE=128` for direct calls.
+Set GPU layers to `auto` to let Ollama choose placement, `0` for CPU-only inference,
+or a positive layer count for GPU offload. Context windows, safety margin, server
+URL and socket timeouts are configurable too. Restart Django after editing `.env`;
+shell/container environment variables take precedence. The model and tokenizer
+remain fixed to Bielik. On the development RTX 3060 Ti (8 GB), `ollama ps` verified
 `100% GPU` with the original 4096-token context, compared to automatic 83% GPU /
 17% CPU loading. GPU fit depends on free VRAM; `ollama ps` reports model placement,
 as described in [Ollama's FAQ](https://docs.ollama.com/faq#how-can-i-tell-if-my-model-was-loaded-onto-the-gpu).
@@ -175,8 +180,9 @@ prepares a fresh archive. Optional `generation_parameters` sets the writer's
 
 Before each model call, `backend/agents/context_budget.py` counts message content
 with the bundled Bielik tokenizer, adds a conservative chat-template allowance,
-the complete output limit and a 128-token margin. Allowed windows are 2048 and
-4096. The API shares a non-decreasing window across all agents and variants in
+the complete output limit and a margin (`OLLAMA_CONTEXT_MARGIN`, default 128).
+Allowed windows come from `OLLAMA_CONTEXT_WINDOWS` (default `2048,4096`).
+The API shares a non-decreasing window across all agents and variants in
 one request, avoiding repeated model reloads when small and large inputs
 alternate. A 2048-token writer output limit starts the run at 4096.
 

@@ -8,6 +8,7 @@ from langchain_ollama import ChatOllama
 from pydantic import Field
 
 from backend import ollama
+from backend.llm_config import OLLAMA_CONFIG
 from backend.ollama import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT
 
 from .context_budget import PreparedContext, prepare_context
@@ -45,7 +46,7 @@ class CancellableChatOllama(ChatOllama):
             payload[-1]['content'], messages=payload, base_url=self.base_url or OLLAMA_BASE_URL,
             timeout=self.request_timeout, temperature=self.temperature, max_tokens=prepared.max_tokens,
             output_schema=kwargs.get('format', self.format) or None, is_cancelled=self.is_cancelled,
-            num_batch=64, num_ctx=prepared.num_ctx,
+            num_batch=OLLAMA_CONFIG.agent_batch_size, num_ctx=prepared.num_ctx,
         )
         return ChatResult(generations=[ChatGeneration(message=AIMessage(
             content=answer, response_metadata={'context_budget': metadata},

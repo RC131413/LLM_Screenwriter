@@ -8,6 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 from langsmith import tracing_context
 
+from backend.llm_config import OLLAMA_CONFIG
 from backend.api.screenplay import blocks_text, can_generate_heading, compose_generated_continuation
 from backend.screenplay_schemas import GeneratedScene, GeneratedSceneWithHeading
 
@@ -15,7 +16,7 @@ from ._model import create_local_chat_model
 from .director import ScenePlan
 
 
-SCENE_WRITE_TIMEOUT = 300
+SCENE_WRITE_TIMEOUT = OLLAMA_CONFIG.scene_timeout
 
 
 class SceneRevision(TypedDict):

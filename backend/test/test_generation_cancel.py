@@ -1,10 +1,12 @@
 import json
 from datetime import timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
 from django.test import Client
 from django.utils import timezone
 
+from backend.agents.archivist import ArchivedContext
 from backend.api.models import GenerationRun, SceneGenerationRequest, SceneVariant
 from backend.ollama import OllamaCancelled
 from ._api_base import ApiTestCase
@@ -16,6 +18,27 @@ ANSWER = json.dumps({'blocks': [{'type': 'speech', 'speaker': 'ANNA', 'parenthet
 
 
 class GenerationCancellationTests(ApiTestCase):
+    @patch_writer(return_value=ANSWER)
+    def test_cancellation_after_shared_archive_stops_all_variants(self, generate):
+        payload = self.payload()
+        before = SceneVariant.objects.count()
+
+        def cancel_after_archive(**kwargs):
+            self.assert_status(self.cancel(payload), 200)
+            return ArchivedContext(characters=[], previous_scenes=[], continuity_facts=[], open_threads=[])
+
+        with patch('backend.agents.graph.ArchivistAgent.prepare_context', side_effect=cancel_after_archive) as archive:
+            self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+                **payload, 'variant_count': 3,
+            }), 409)
+
+        archive.assert_called_once()
+        generate.assert_not_called()
+        run = GenerationRun.objects.get(run_metadata__generation_id=payload['generation_id'])
+        self.assertEqual(run.status, 'cancelled')
+        self.assertEqual(list(run.agent_executions.values_list('node_name', 'status')), [('archivist', 'cancelled')])
+        self.assertEqual(SceneVariant.objects.count(), before)
+
     @patch_writer()
     def test_active_run_is_recoverable_and_blocks_another_scene(self, generate):
         payload = self.payload()

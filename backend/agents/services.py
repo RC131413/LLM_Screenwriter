@@ -21,6 +21,7 @@ from backend.api.services import (
 from backend.ollama import OLLAMA_BASE_URL, OLLAMA_MODEL, OllamaCancelled, OllamaError
 
 from ._model import CancellableChatOllama
+from .archivist import ArchivedContext
 from .graph import SceneGraphState, build_scene_graph, scene_graph
 from .scenarist import SCENE_WRITE_TIMEOUT
 
@@ -149,10 +150,12 @@ def _finish_agent(execution, status, error_message=''):
     )
 
 
-def _run_workflow(graph, run, *, context, number) -> SceneGraphState:
-    state = {'user_prompt': run.request.user_prompt, 'context': context}
+def _run_workflow(graph, run, *, context, number, archived_context: ArchivedContext | None = None) -> SceneGraphState:
+    state: SceneGraphState = {'user_prompt': run.request.user_prompt, 'context': context}
+    if archived_context is not None:
+        state['archived_context'] = archived_context
     _ensure_running(run)
-    execution = _start_agent(run, 'archivist', number)
+    execution = _start_agent(run, 'director' if archived_context is not None else 'archivist', number)
     try:
         with tracing_context(enabled=False), closing(graph.stream(state, stream_mode='updates')) as updates:
             for update in updates:
@@ -195,13 +198,16 @@ def generate_variants_for_run(run: GenerationRun, *, user: User, variant_count: 
             request_timeout=SCENE_WRITE_TIMEOUT,
         )
         graph = build_scene_graph(model=model, writing_model=writer)
-        results = [
-            _run_workflow(
+        results = []
+        archived_context = None
+        for number in range(1, (variant_count or 1) + 1):
+            result = _run_workflow(
                 graph, run, number=number,
                 context=run.request.context_snapshot | {'variant_approach': SCENE_VARIANT_APPROACHES[number - 1]},
+                archived_context=archived_context,
             )
-            for number in range(1, (variant_count or 1) + 1)
-        ]
+            archived_context = result['archived_context']
+            results.append(result)
         return _save_results(run, user=user, results=results, started=started, numbered=variant_count is not None)
     except Exception as error:
         _record_failure(run, error, started)

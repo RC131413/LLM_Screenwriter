@@ -1,7 +1,9 @@
 import json
+from unittest.mock import patch
 
 from django.test import Client
 
+from backend.agents.archivist import ArchivistAgent
 from backend.api.models import AgentExecution, GenerationRun, Scene, SceneGenerationRequest, SceneVariant
 from backend.ollama import OLLAMA_MODEL, OllamaError
 from backend.api.scheams import GeneratedScene
@@ -52,13 +54,18 @@ class SceneGenerationTests(ApiTestCase):
         self.assertEqual(GenerationRun.objects.get(pk=variants[0]['run_id']).variants.count(), 2)
 
     @patch_writer(side_effect=generation_answer)
-    def test_requested_batch_sizes_use_the_same_snapshot_and_saved_temperature(self, generate):
+    @patch('backend.agents.graph.ArchivistAgent.prepare_context', autospec=True,
+           side_effect=ArchivistAgent.prepare_context)
+    def test_requested_batch_sizes_share_one_fresh_archive_and_saved_temperature(self, generate, prepare_context):
         self.assert_status(self.send('put', '/users/me/preferences', {
             'llm_preferences': {'temperature': 0.4, 'max_tokens': 512},
         }), 200)
         for count in (1, 2, 3):
             with self.subTest(count=count):
                 generate.reset_mock()
+                prepare_context.reset_mock()
+                self.scene.ai_metadata = {'scene_goal': f'Cel dla {count} wariantów.'}
+                self.scene.save(update_fields=['ai_metadata'])
                 variants = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
                     'user_prompt': 'Napisz początek.', 'variant_count': count,
                 }), 201).json()
@@ -72,6 +79,20 @@ class SceneGenerationTests(ApiTestCase):
                 self.assertTrue(all(call.kwargs['temperature'] == 0.4 for call in generate.call_args_list))
                 run = GenerationRun.objects.get(pk=variants[0]['run_id'])
                 self.assertEqual(list(run.variants.values_list('pk', flat=True)), [variant['id'] for variant in variants])
+                prepare_context.assert_called_once()
+                self.assertEqual(prepare_context.call_args.kwargs['user_prompt'], 'Napisz początek.')
+                self.assertEqual(prepare_context.call_args.kwargs['context'], run.request.context_snapshot)
+                self.assertEqual(prepare_context.call_args.kwargs['context']['scene']['ai_metadata'],
+                                 self.scene.ai_metadata)
+                self.assertEqual(list(run.agent_executions.values_list('node_name', 'status')), [
+                    ('archivist', 'completed'),
+                    *[entry for _ in range(count) for entry in (
+                        ('director', 'completed'), ('scenarist', 'completed'), ('critic', 'completed'),
+                    )],
+                ])
+                self.assertEqual(list(run.agent_executions.exclude(node_name='archivist')
+                                      .values_list('input_payload', flat=True)),
+                                 [{'variant_number': number} for number in range(1, count + 1) for _ in range(3)])
 
     @patch_writer()
     def test_retries_a_cut_or_an_embedded_next_scene_heading(self, generate):

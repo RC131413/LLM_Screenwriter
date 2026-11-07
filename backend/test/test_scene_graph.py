@@ -5,6 +5,7 @@ import httpx
 from django.test import SimpleTestCase
 from langchain_ollama import ChatOllama
 
+from backend.agents.archivist import ArchivedContext
 from backend.agents.graph import MAX_REVISIONS, build_scene_graph
 from backend.ollama import OLLAMA_MODEL
 
@@ -26,9 +27,9 @@ def draft(text):
 
 
 class SceneGraphTests(SimpleTestCase):
-    def run_graph(self, replies):
+    def run_graph(self, replies, *, archived_context=None):
         self.requests = []
-        responses = iter([ARCHIVE, PLAN, *replies])
+        responses = iter([*([ARCHIVE] if archived_context is None else []), PLAN, *replies])
 
         def respond(request):
             self.assertEqual((request.method, request.url.path), ('POST', '/api/chat'))
@@ -50,12 +51,35 @@ class SceneGraphTests(SimpleTestCase):
             patch('backend.agents.critic.create_local_chat_model', return_value=model),
         ):
             graph = build_scene_graph()
-        result = graph.invoke({
+        state = {
             'user_prompt': 'Marta ma odnaleźć bilet.',
             'context': {'scene': {'location_heading': 'WN. DWORZEC'}},
-        })
+        }
+        if archived_context is not None:
+            state['archived_context'] = archived_context
+        result = graph.invoke(state)
         self.assertIsNone(next(responses, None), 'Graf skończył przed wykonaniem oczekiwanych węzłów.')
         return result
+
+    def test_prepared_archive_is_reused_without_another_archivist_call(self):
+        archived = ArchivedContext(
+            characters=[{'name': 'Marta', 'profile': 'Szuka biletu do domu.'}],
+            previous_scenes=[{'scene_number': 1, 'summary': 'Marta gubi bilet na dworcu.'}],
+            continuity_facts=['Bilet został na dworcu.'], open_threads=[],
+        )
+        before = archived.model_dump()
+        result = self.run_graph([
+            draft('Marta znajduje bilet pod ławką.'),
+            {'score': 9, 'feedback': 'Plan zrealizowany.', 'findings': []},
+        ], archived_context=archived)
+
+        self.assertEqual(len(self.requests), 3)
+        for request in self.requests:
+            for field, value in before.items():
+                self.assertEqual(request['context'][field], value)
+        self.assertEqual(result['archived_context'], archived)
+        self.assertEqual(archived.model_dump(), before)
+        self.assertEqual(result['review_status'], 'accepted')
 
     def test_advice_alone_does_not_trigger_a_revision(self):
         text = 'Marta znajduje bilet pod ławką.'

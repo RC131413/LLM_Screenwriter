@@ -168,7 +168,9 @@ X-CSRFToken: <current CSRF token>
 The server verifies scene ownership and reads its current text and heading from
 PostgreSQL. It freezes a context snapshot and runs the LangGraph workflow
 Archiwista → Reżyser → Scenarzysta → Krytyk. The critic can request at most two
-rewrites for each variant. Optional `generation_parameters` sets the writer's
+rewrites for each variant. The archivist prepares one shared context per request;
+additional variants start at the director with that context. A new request always
+prepares a fresh archive. Optional `generation_parameters` sets the writer's
 `temperature` and `max_tokens`. Inference runs outside the database transaction.
 
 The endpoint returns HTTP 201 with a `VariantOut` object or a list when

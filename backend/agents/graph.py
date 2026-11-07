@@ -22,10 +22,10 @@ ReviewStatus = Literal['accepted', 'revision_requested', 'revision_limit_reached
 class SceneGraphInput(TypedDict):
     user_prompt: str
     context: dict[str, Any]
+    archived_context: NotRequired[ArchivedContext]
 
 
 class SceneGraphState(SceneGraphInput):
-    archived_context: NotRequired[ArchivedContext]
     beats: NotRequired[list[str]]
     scene_text: NotRequired[str]
     scene_blocks: NotRequired[list[dict[str, str]]]
@@ -60,7 +60,8 @@ def build_scene_graph(*, model: ChatOllama | None = None, writing_model: ChatOll
 
     def archive(state: SceneGraphState) -> dict[str, ArchivedContext]:
         return {'archived_context': archivist.prepare_context(
-            user_prompt=state['user_prompt'], context=state['context'],
+            user_prompt=state['user_prompt'],
+            context={key: value for key, value in state['context'].items() if key != 'variant_approach'},
         )}
 
     def plan(state: SceneGraphState) -> dict[str, list[str]]:
@@ -118,12 +119,15 @@ def build_scene_graph(*, model: ChatOllama | None = None, writing_model: ChatOll
     def route_after_review(state: SceneGraphState) -> Literal['scenarist', '__end__']:
         return 'scenarist' if state['review_status'] == 'revision_requested' else END
 
+    def route_start(state: SceneGraphState) -> Literal['archivist', 'director']:
+        return 'director' if 'archived_context' in state else 'archivist'
+
     workflow = StateGraph(SceneGraphState, input_schema=SceneGraphInput)
     workflow.add_node('archivist', archive)
     workflow.add_node('director', plan)
     workflow.add_node('scenarist', write)
     workflow.add_node('critic', review)
-    workflow.add_edge(START, 'archivist')
+    workflow.add_conditional_edges(START, route_start)
     workflow.add_edge('archivist', 'director')
     workflow.add_edge('director', 'scenarist')
     workflow.add_edge('scenarist', 'critic')

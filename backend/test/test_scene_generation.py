@@ -6,7 +6,6 @@ from django.test import Client
 from backend.agents.archivist import ArchivistAgent
 from backend.api.models import AgentExecution, GenerationRun, Scene, SceneGenerationRequest, SceneVariant
 from backend.ollama import OLLAMA_MODEL, OllamaError
-from backend.api.scheams import GeneratedScene
 
 from ._api_base import ApiTestCase
 from ._graph_transport import patch_writer
@@ -178,7 +177,8 @@ class SceneGenerationTests(ApiTestCase):
         options = generate_text.call_args.kwargs
         self.assertEqual(options['temperature'], 0.7)
         self.assertEqual(options['max_tokens'], 2048)
-        self.assertEqual(options['output_schema'], GeneratedScene.model_json_schema())
+        self.assertNotIn('heading', options['output_schema']['properties'])
+        self.assertEqual(options['output_schema']['$defs']['CastGeneratedSpeech']['properties']['speaker']['const'], 'ANNA')
         self.assertTrue(callable(options['is_cancelled']))
         variant = SceneVariant.objects.select_related('run__request').get(pk=generated['id'])
         self.assertEqual(variant.run.status, 'completed')

@@ -92,6 +92,11 @@ class ParentheticalFormatTests(SimpleTestCase):
 
 
 class ParentheticalApiTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.character.name = 'MACIEK'
+        self.character.save(update_fields=['name'])
+
     @patch_writer(return_value=REPEATED)
     def test_preview_text_and_applied_scene_share_refined_parentheticals(self, generate):
         variant = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {

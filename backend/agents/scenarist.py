@@ -10,7 +10,7 @@ from langsmith import tracing_context
 
 from backend.llm_config import OLLAMA_CONFIG
 from backend.api.screenplay import blocks_text, can_generate_heading, compose_generated_continuation
-from backend.screenplay_schemas import GeneratedScene, GeneratedSceneWithHeading
+from backend.screenplay_schemas import canonical_speaker_name, generated_scene_schema
 
 from ._model import create_local_chat_model
 from .director import ScenePlan
@@ -43,7 +43,8 @@ WRITE_SCENE = ChatPromptTemplate.from_messages([
      'Jeśli plan przewiduje rozmowę, napisz faktycznie wypowiadane kwestie. Jeśli akcja wystarcza, '
      'scena może być niema. Zwróć obiekt JSON z listą blocks. Każdy blok akcji ma type równy action '
      'oraz text w czasie teraźniejszym. Blok wypowiedzi ma type równy speech, nazwę postaci w speaker, '
-     'jej kwestię w spoken_text i wskazówkę aktorską w parenthetical. Jeśli wskazówka jest zbędna '
+     'jej kwestię w spoken_text i wskazówkę aktorską w parenthetical. {speaker_instruction}'
+     'Jeśli wskazówka jest zbędna '
      'lub preferencje autora jej nie dopuszczają, wpisz w parenthetical null. '
      'Pozostań w miejscu i czasie bieżącej sceny. Przy kontynuacji zacznij po ostatnim zapisanym '
      'zdarzeniu. W blocks nie umieszczaj nagłówków, przejść, numerów punktów ani komentarzy. '
@@ -60,10 +61,7 @@ class ScenaristAgent:
     def __init__(self, model: ChatOllama | None = None):
         if model is None:
             model = create_local_chat_model(timeout=SCENE_WRITE_TIMEOUT, max_tokens=2048)
-        self._write_body = WRITE_SCENE | model.with_structured_output(GeneratedScene, method='json_schema')
-        self._write_with_heading = WRITE_SCENE | model.with_structured_output(
-            GeneratedSceneWithHeading, method='json_schema',
-        )
+        self._model = model
 
     def write_scene(
         self, *, user_prompt: str, context: dict[str, Any], beats: list[str],
@@ -88,10 +86,25 @@ class ScenaristAgent:
         plan = ScenePlan(beats=beats)
         scene = context.get('scene', {})
         generate_heading = 'scene' in context and can_generate_heading(scene)
+        names = context.get('selected_character_names')
+        if names is None:
+            names = [character.get('name') for character in context.get('characters', [])]
+        speaker_names = tuple(dict.fromkeys(
+            canonical_speaker_name(name) for name in names if isinstance(name, str) and name.strip()
+        ))
+        schema = generated_scene_schema(speaker_names=speaker_names, with_heading=generate_heading)
+        chain = WRITE_SCENE | self._model.with_structured_output(schema, method='json_schema')
         payload: dict[str, Any] = {'user_prompt': user_prompt, 'context': context, 'beats': plan.beats}
         if revision is not None:
             payload['revision'] = revision
-        chain = self._write_with_heading if generate_heading else self._write_body
+        speaker_instruction = (
+            'Dozwolone etykiety speaker z przypisanej obsady: '
+            f'{json.dumps(speaker_names, ensure_ascii=False)}. '
+            'Wybieraj je dokładnie, bez nazw zastępczych, ról i określeń pokrewieństwa. '
+            'Te określenia mogą występować w akcji i spoken_text. '
+            'Nie każda przypisana postać musi mówić. '
+            if speaker_names else ''
+        )
         heading_instruction = (
             'Scena jest pusta. Dodaj heading z polami location_type (WN. lub PL.), location_heading '
             '(sama nazwa miejsca) i time_of_day (np. DZIEŃ lub NOC), zgodnymi z pierwszym punktem planu.'
@@ -100,6 +113,7 @@ class ScenaristAgent:
         with tracing_context(enabled=False):
             generated = chain.invoke({
                 'payload': json.dumps(payload, ensure_ascii=False),
+                'speaker_instruction': speaker_instruction,
                 'heading_instruction': heading_instruction,
                 'format_instruction': f'\nPOPRAW FORMAT: {format_feedback}' if format_feedback else '',
             })

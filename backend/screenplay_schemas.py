@@ -1,8 +1,9 @@
 """Shared Pydantic contracts for generated scenes and editor blocks."""
 
+from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
 
 class GeneratedBlock(BaseModel):
@@ -47,6 +48,30 @@ class GeneratedSceneWithHeading(BaseModel):
     model_config = ConfigDict(extra='forbid')
     heading: ModelHeading
     blocks: list[Annotated[GeneratedAction | GeneratedSpeech, Field(discriminator='type')]] = Field(min_length=1)
+
+
+def canonical_speaker_name(value):
+    """Normalize only whitespace/case, never infer a person's identity from a role."""
+    return ' '.join(value.split()).upper() if isinstance(value, str) else value
+
+
+@lru_cache(maxsize=64)
+def generated_scene_schema(*, speaker_names: tuple[str, ...] = (), with_heading: bool = False):
+    """Constrain dialogue labels to the selected cast, keeping the public scene shape."""
+    base = GeneratedSceneWithHeading if with_heading else GeneratedScene
+    if not speaker_names:
+        return base
+
+    speech = create_model(
+        'CastGeneratedSpeech', __base__=GeneratedSpeech,
+        __validators__={'normalize_speaker': field_validator('speaker', mode='before')(canonical_speaker_name)},
+        speaker=(Literal[speaker_names], Field(description='Dokładna etykieta postaci z przypisanej obsady.')),
+    )
+    block = Annotated[GeneratedAction | speech, Field(discriminator='type')]
+    return create_model(
+        'CastGeneratedSceneWithHeading' if with_heading else 'CastGeneratedScene',
+        __base__=base, blocks=(list[block], Field(min_length=1)),
+    )
 
 
 class EditorBlock(GeneratedBlock):

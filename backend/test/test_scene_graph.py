@@ -27,7 +27,7 @@ def draft(text):
 
 
 class SceneGraphTests(SimpleTestCase):
-    def run_graph(self, replies, *, archived_context=None):
+    def run_graph(self, replies, *, archived_context=None, context=None):
         self.requests = []
         responses = iter([*([ARCHIVE] if archived_context is None else []), PLAN, *replies])
 
@@ -53,13 +53,27 @@ class SceneGraphTests(SimpleTestCase):
             graph = build_scene_graph()
         state = {
             'user_prompt': 'Marta ma odnaleźć bilet.',
-            'context': {'scene': {'location_heading': 'WN. DWORZEC'}},
+            'context': context if context is not None else {'scene': {'location_heading': 'WN. DWORZEC'}},
         }
         if archived_context is not None:
             state['archived_context'] = archived_context
         result = graph.invoke(state)
         self.assertIsNone(next(responses, None), 'Graf skończył przed wykonaniem oczekiwanych węzłów.')
         return result
+
+    def test_selected_names_survive_profiles_omitted_from_the_archive(self):
+        result = self.run_graph([
+            {'blocks': [{'type': 'speech', 'speaker': 'OLEK', 'parenthetical': None,
+                         'spoken_text': 'Znalazłem twój bilet.'}]},
+            {'score': 9, 'feedback': 'Scena spójna.', 'findings': []},
+        ], context={
+            'scene': {'location_heading': 'WN. DWORZEC'},
+            'characters': [{'name': 'Marta'}, {'name': 'Olek'}],
+        })
+
+        self.assertEqual(self.requests[2]['context']['characters'], [])
+        self.assertEqual(self.requests[2]['context']['selected_character_names'], ['Marta', 'Olek'])
+        self.assertEqual(result['scene_blocks'][0]['text'], 'OLEK')
 
     def test_prepared_archive_is_reused_without_another_archivist_call(self):
         archived = ArchivedContext(

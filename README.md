@@ -225,6 +225,12 @@ The model's enforced schema accepts `action` and `speech` within one scene.
 A `speech` groups `speaker`, nullable `parenthetical` and `spoken_text`; the backend
 expands it to the existing editor blocks in this order: `character`, optional
 `parenthetical`, `dialogue`. This prevents detached or trailing acting directions.
+When the scene has selected characters, the writer's JSON schema restricts
+`speaker` to their canonical uppercase names. Roles and family terms remain
+allowed in action and spoken words, but cannot replace dialogue labels. Selected
+names come from the original cast snapshot, even if the archivist omits a profile.
+Without selected characters, speaker names remain unrestricted. This applies to
+newly generated variants; manually authored blocks keep their existing behavior.
 The prompt encourages short, useful acting directions mixed with ordinary speech;
 `parenthetical: null` means no direction is needed for that line. New AI directions are refined
 before saving: redundant self-addressing is removed while preserving vocal intent

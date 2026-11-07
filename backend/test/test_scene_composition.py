@@ -14,6 +14,11 @@ SCREENPLAY = json.dumps({'heading': HEADING, 'blocks': [ACTION, SPEECH]})
 
 
 class SceneCompositionApiTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.character.name = 'MAĆKO'
+        self.character.save(update_fields=['name'])
+
     @patch_writer(return_value=ACTION_ONLY)
     def test_generic_request_accepts_action_only_without_retry_and_applies_it(self, generate):
         before = (SceneGenerationRequest.objects.count(), SceneVariant.objects.count())

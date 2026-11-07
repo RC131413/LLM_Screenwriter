@@ -61,11 +61,71 @@ class ScenaristAgentTests(SimpleTestCase):
         ]))
         self.assertEqual(context, original)
         request, = self.requests
-        self.assertEqual(request['format'], GeneratedScene.model_json_schema())
+        self.assertEqual(request['format']['$defs']['CastGeneratedSpeech']['properties']['speaker']['enum'],
+                         ['MARTA', 'OLEK'])
         self.assertEqual([message['role'] for message in request['messages']], ['system', 'user'])
         self.assertEqual(json.loads(request['messages'][1]['content']), {
             'user_prompt': prompt, 'context': original, 'beats': beats,
         })
+
+    def test_cast_label_is_fixed_while_family_terms_in_action_and_dialogue_remain(self):
+        self.reply = {'blocks': [
+            {'type': 'action', 'text': 'Pradziadek pokazuje Maćkowi dokument.'},
+            {'type': 'speech', 'speaker': ' starszy  mężczyzna ', 'parenthetical': None,
+             'spoken_text': 'Twój dziadek zostawił ten list.'},
+            {'type': 'speech', 'speaker': 'Maciek', 'parenthetical': None, 'spoken_text': 'Dziękuję, pradziadku.'},
+        ]}
+        context = {'characters': [{'name': 'Maciek'}, {'name': 'STARSZY MĘŻCZYZNA', 'role': 'Pradziadek Maćka'}]}
+        result = self.scenarist.write_scene_draft(
+            user_prompt='Pradziadek pokazuje dokument.', context=context,
+            beats=['Starszy mężczyzna pokazuje Maćkowi dokument.'],
+        )
+
+        self.assertEqual([block['text'] for block in result.blocks if block['type'] == 'character'],
+                         ['STARSZY MĘŻCZYZNA', 'MACIEK'])
+        self.assertEqual(result.blocks[0]['text'], 'Pradziadek pokazuje Maćkowi dokument.')
+        self.assertIn('Twój dziadek zostawił ten list.', result.text)
+        self.assertIn('Dziękuję, pradziadku.', result.text)
+        self.assertEqual(len(self.requests), 1)
+
+    def test_alias_cannot_replace_a_selected_label_even_if_a_model_ignores_the_schema(self):
+        self.reply = {'blocks': [
+            {'type': 'speech', 'speaker': 'PRADZIADEK', 'parenthetical': None, 'spoken_text': 'Usiądź.'},
+        ]}
+        with self.assertRaises(OutputParserException):
+            self.scenarist.write_scene(
+                user_prompt='Pradziadek zaprasza Maćka.',
+                context={'characters': [{'name': 'MACIEK'}, {'name': 'STARSZY MĘŻCZYZNA'}]},
+                beats=['Starszy mężczyzna zaprasza Maćka do stołu.'],
+            )
+        self.assertEqual(len(self.requests), 1)
+
+    def test_labels_are_enforced_also_when_generating_a_new_heading(self):
+        self.reply = {
+            'heading': {'location_type': 'WN.', 'location_heading': 'CHATA', 'time_of_day': 'RANO'},
+            'blocks': [{'type': 'speech', 'speaker': 'STARSZY MĘŻCZYZNA',
+                        'parenthetical': None, 'spoken_text': 'To nasza rodzina.'}],
+        }
+        result = self.scenarist.write_scene_draft(
+            user_prompt='Starszy mężczyzna wyjaśnia pochodzenie.',
+            context={'scene': {}, 'characters': [{'name': 'MACIEK'}, {'name': 'STARSZY MĘŻCZYZNA'}]},
+            beats=['Starszy mężczyzna wskazuje rodzinne dokumenty.'],
+        )
+        self.assertEqual(result.heading, {'location_heading': 'WN. CHATA', 'time_of_day': 'RANO'})
+        self.assertIn('STARSZY MĘŻCZYZNA', result.text)
+        self.assertEqual(self.requests[0]['format']['$defs']['CastGeneratedSpeech']['properties']['speaker']['enum'],
+                         ['MACIEK', 'STARSZY MĘŻCZYZNA'])
+
+    def test_without_selected_characters_the_model_can_still_name_a_speaker(self):
+        self.reply = {'blocks': [
+            {'type': 'speech', 'speaker': 'PRADZIADEK', 'parenthetical': None, 'spoken_text': 'Usiądź.'},
+        ]}
+        result = self.scenarist.write_scene(
+            user_prompt='Pradziadek zaprasza Maćka.', context={'characters': []},
+            beats=['Pradziadek zaprasza Maćka do stołu.'],
+        )
+        self.assertEqual(result, 'PRADZIADEK\n\nUsiądź.')
+        self.assertEqual(self.requests[0]['format'], GeneratedScene.model_json_schema())
 
     def test_adds_generated_heading_for_an_explicitly_empty_scene(self):
         self.reply['heading'] = {'location_type': 'PL.', 'location_heading': 'peron', 'time_of_day': 'NOC'}
@@ -123,6 +183,8 @@ class ScenaristAgentTests(SimpleTestCase):
 
         self.assertEqual(first_result, 'Marta rusza na peron.')
         self.assertEqual(second_result, 'Jan otwiera garaż.')
+        self.assertEqual(self.requests[0]['format']['$defs']['CastGeneratedSpeech']['properties']['speaker']['const'], 'MARTA')
+        self.assertEqual(self.requests[1]['format']['$defs']['CastGeneratedSpeech']['properties']['speaker']['const'], 'JAN')
         self.assertEqual(
             [json.loads(request['messages'][1]['content']) for request in self.requests],
             [

@@ -40,6 +40,10 @@ def _writing_context(state: SceneGraphState) -> dict[str, Any]:
     """Keep scene settings and use the archive in place of raw history and cast."""
     source = state['context']
     archived = state['archived_context'].model_dump(mode='json')
+    if 'characters' in source:
+        # Cast selection is authoritative even when the archivist omits a profile
+        # from its relevance summary. Do not derive the allowed cast from that summary.
+        archived['selected_character_names'] = [character['name'] for character in source['characters']]
     for character in archived['characters']:
         name = character['name'].casefold()
         profiles = [

@@ -32,9 +32,10 @@ function AutoTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 interface Props {
   scene: Scene; sceneNumber: number; zoom: number; onChange: (scene: Scene, edit?: SceneTextEdit) => void; onDelete: () => void;
   onHistoryBoundary?: () => void;
+  spellCheck?: boolean; showBlockTypes?: boolean;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
 }
-export function SceneEditor({ scene, sceneNumber, zoom, onChange, onDelete, undo, redo, canUndo, canRedo, onHistoryBoundary }: Props) {
+export function SceneEditor({ scene, sceneNumber, zoom, onChange, onDelete, undo, redo, canUndo, canRedo, onHistoryBoundary, spellCheck = false, showBlockTypes = false }: Props) {
   const [focusedId, setFocusedId] = useState<string>();
   const [newType, setNewType] = useState<BlockType>('action');
   const page = useRef<HTMLElement>(null);
@@ -129,9 +130,9 @@ export function SceneEditor({ scene, sceneNumber, zoom, onChange, onDelete, undo
       <div className="toolbar-group block-tools"><IconButton label="Przesuń element w górę" disabled={!focused || scene.blocks[0]?.id === focusedId} onClick={() => moveBlock(-1)}><ArrowUp size={15} /></IconButton><IconButton label="Przesuń element w dół" disabled={!focused || scene.blocks.at(-1)?.id === focusedId} onClick={() => moveBlock(1)}><ArrowDown size={15} /></IconButton><IconButton label="Usuń element" disabled={!focused} onClick={() => { onChange({ ...scene, blocks: scene.blocks.filter(block => block.id !== focusedId) }); setFocusedId(undefined); }}><Trash2 size={15} /></IconButton></div>
       <div className="toolbar-end"><select aria-label="Status sceny" value={scene.status} onChange={event => onChange({ ...scene, status: event.target.value as Scene['status'] })}>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><IconButton label="Usuń scenę" onClick={onDelete}><Trash2 size={16} /></IconButton></div>
     </div>
-    <div className="document-scroll" onKeyDownCapture={handleEditorKey} onPointerDownCapture={onHistoryBoundary}
+    <div className="document-scroll" lang="pl" onKeyDownCapture={handleEditorKey} onPointerDownCapture={onHistoryBoundary}
       onFocusCapture={onHistoryBoundary} onBlurCapture={onHistoryBoundary} onPasteCapture={onHistoryBoundary} onCutCapture={onHistoryBoundary}>
-      <div className="document-caption"><span>SCENA {String(sceneNumber).padStart(2, '0')}</span><div className="scene-title-field"><input aria-label="Tytuł sceny" title="Edytuj tytuł sceny" maxLength={255} value={scene.title} onChange={event => onChange({ ...scene, title: event.target.value }, textEdit(event, 'title'))} /><Pencil size={14} aria-hidden="true" /></div></div>
+      <div className="document-caption"><span>SCENA {String(sceneNumber).padStart(2, '0')}</span><div className="scene-title-field"><input aria-label="Tytuł sceny" title="Edytuj tytuł sceny" spellCheck={spellCheck} maxLength={255} value={scene.title} onChange={event => onChange({ ...scene, title: event.target.value }, textEdit(event, 'title'))} /><Pencil size={14} aria-hidden="true" /></div></div>
       <div className="document-sheet" style={{ zoom: zoom / 100 }}>
       <article ref={page} className="script-page" aria-label="Edytor scenariusza">
         <div className="page-number">{sceneNumber}.</div>
@@ -141,7 +142,8 @@ export function SceneEditor({ scene, sceneNumber, zoom, onChange, onDelete, undo
           <p id={`scene-heading-help-${scene.id}`}>Po myślniku wpisz porę dnia, np. RANO, DZIEŃ lub NOC.</p>
         </div>
         {scene.blocks.map((block, index) => <div key={block.id} className={`script-block ${block.type} ${focusedId === block.id ? 'focused' : ''}`}>
-          <AutoTextarea id={`block-${block.id}`} aria-label={`${blockLabels[block.type]} ${index + 1}`} spellCheck={false} value={block.text} placeholder={blockLabels[block.type]} onFocus={() => setFocusedId(block.id)} onPointerDown={() => { preferredX.current = undefined; affinity.current = 'forward'; }} onPointerUp={event => { affinity.current = pointerCaretAffinity(event.currentTarget, event.clientY); }} onKeyDown={event => handleBlockKey(event, index)} onChange={event => { preferredX.current = undefined; affinity.current = 'forward'; changeBlock(block.id, { text: event.target.value }, textEdit(event, `block:${block.id}`)); }} />
+          {showBlockTypes && <span className="script-block-type" aria-hidden="true">{blockLabels[block.type]}</span>}
+          <AutoTextarea id={`block-${block.id}`} aria-label={`${blockLabels[block.type]} ${index + 1}`} spellCheck={spellCheck && block.type !== 'character' && block.type !== 'transition'} value={block.text} placeholder={blockLabels[block.type]} onFocus={() => setFocusedId(block.id)} onPointerDown={() => { preferredX.current = undefined; affinity.current = 'forward'; }} onPointerUp={event => { affinity.current = pointerCaretAffinity(event.currentTarget, event.clientY); }} onKeyDown={event => handleBlockKey(event, index)} onChange={event => { preferredX.current = undefined; affinity.current = 'forward'; changeBlock(block.id, { text: event.target.value }, textEdit(event, `block:${block.id}`)); }} />
         </div>)}
         <button className="add-block" onClick={addBlock}><Plus size={14} />Dodaj element</button>
       </article>

@@ -10,6 +10,7 @@ beforeEach(() => {
   });
   window.history.replaceState(null, '', '/');
   sessionStorage.clear();
+  localStorage.clear();
   for (const cookie of document.cookie.split(';')) {
     document.cookie = `${cookie.split('=')[0].trim()}=; Max-Age=0; Path=/`;
   }

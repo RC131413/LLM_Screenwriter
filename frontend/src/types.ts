@@ -2,6 +2,12 @@ export type BlockType = 'action' | 'character' | 'dialogue' | 'parenthetical' | 
 export type SceneStatus = 'draft' | 'review' | 'ready';
 export type View = 'script' | 'outline' | 'characters';
 
+export interface EditorSettings {
+  zoom: number;
+  spellCheck: boolean;
+  showBlockTypes: boolean;
+}
+
 export interface ScriptBlock { id: string; type: BlockType; text: string }
 export interface Scene {
   id: string;

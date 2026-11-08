@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronRight, Clapperboard, FileText, LayoutList, Minus, Plus, RotateCcw, UsersRound } from 'lucide-react';
+import { Check, ChevronRight, Clapperboard, FileText, LayoutList, UsersRound } from 'lucide-react';
 import { useSession } from './hooks/useSession';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useProjectNavigation } from './hooks/useProjectNavigation';
 import { usePreferences } from './hooks/usePreferences';
 import { useProfile } from './hooks/useProfile';
 import { useGeneration } from './hooks/useGeneration';
+import { useEditorSettings } from './hooks/useEditorSettings';
 import { TopBar } from './components/TopBar';
 import { SceneSidebar } from './components/SceneSidebar';
 import { SceneEditor } from './components/SceneEditor';
@@ -15,19 +16,19 @@ import { CharactersView } from './components/CharactersView';
 import { ProjectDialog } from './components/ProjectDialog';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { PreferencesDialog } from './components/PreferencesDialog';
+import { EditorSettingsDialog } from './components/EditorSettingsDialog';
 import { SettingsPage } from './components/SettingsPage';
 import { AuthPage } from './components/AuthPage';
 import { RequestState } from './components/RequestState';
 import { Modal } from './components/Modal';
-import { IconButton } from './components/IconButton';
 import { exportProject } from './services/export';
 import { errorMessage } from './services/workspaceData';
 import { isInTrash, projectsInCollection } from './services/projectLibrary';
-import { screenplayModel } from './types';
 import type { DashboardCollection, View } from './types';
 
 export default function App() {
   const session = useSession();
+  const editor = useEditorSettings(session.user?.id);
   const generation = useGeneration(session.user?.id);
   const workspace = useWorkspace(session.user?.id);
   const preferences = usePreferences(session.user?.id);
@@ -47,7 +48,6 @@ export default function App() {
   const [deletingProjectId, setDeletingProjectId] = useState<string>();
   const editingProject = workspace.projects.find(item => item.id === editingProjectId);
   const deletingProject = workspace.projects.find(item => item.id === deletingProjectId);
-  const [zoom, setZoom] = useState(100);
   const [exportFormat, setExportFormat] = useState<'fountain' | 'json'>('fountain');
   const [notice, setNotice] = useState('');
   const [operationError, setOperationError] = useState('');
@@ -95,7 +95,7 @@ export default function App() {
         <main className="main-workspace">
           <div className="workspace-nav"><div className="workspace-tabs" role="tablist" aria-label="Widoki projektu">{tabs.map(tab => <button key={tab.id} role="tab" id={`view-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={view === tab.id} onClick={() => setView(tab.id)}><tab.icon size={15} />{tab.label}{tab.id === 'characters' && <span className="tab-count">{project.characters.length}</span>}</button>)}</div><span className="document-version">Wersja robocza</span></div>
           <div className="workspace-content" id="workspace-content" role="tabpanel" aria-labelledby={`view-tab-${view}`} inert={workspace.mutating}>
-            {view === 'script' ? scene ? <SceneEditor key={scene.id} scene={scene} sceneNumber={scene.scene_number} zoom={zoom} onChange={workspace.updateScene} onHistoryBoundary={workspace.breakHistoryGroup} onDelete={() => setModal('deleteScene')} undo={() => workspace.undo(scene.id)} redo={() => workspace.redo(scene.id)} canUndo={workspace.canUndo(scene.id)} canRedo={workspace.canRedo(scene.id)} /> : <div className="empty-view"><Clapperboard size={30} strokeWidth={1.4} /><h2>Pierwsza scena</h2><button className="button" onClick={() => setView('outline')}><LayoutList size={15} />Otwórz strukturę</button></div> : view === 'outline' ? <OutlineView project={project} onSelect={selectScene}
+            {view === 'script' ? scene ? <SceneEditor key={scene.id} scene={scene} sceneNumber={scene.scene_number} zoom={editor.settings.zoom} spellCheck={editor.settings.spellCheck} showBlockTypes={editor.settings.showBlockTypes} onChange={workspace.updateScene} onHistoryBoundary={workspace.breakHistoryGroup} onDelete={() => setModal('deleteScene')} undo={() => workspace.undo(scene.id)} redo={() => workspace.redo(scene.id)} canUndo={workspace.canUndo(scene.id)} canRedo={workspace.canRedo(scene.id)} /> : <div className="empty-view"><Clapperboard size={30} strokeWidth={1.4} /><h2>Pierwsza scena</h2><button className="button" onClick={() => setView('outline')}><LayoutList size={15} />Otwórz strukturę</button></div> : view === 'outline' ? <OutlineView project={project} onSelect={selectScene}
               onAdd={async act => { const id = await workspace.addScene(project.id, act); selectScene(id); }} onAddAct={() => workspace.addAct(project.id)}
               onSaveAct={act => workspace.editAct(project.id, act)} onRemoveAct={act => workspace.removeAct(project.id, act)}
               onMoveScene={(id, act) => workspace.moveScene(project.id, id, act)} onReorder={scenes => workspace.reorderScenes(project.id, scenes)} /> :
@@ -113,11 +113,7 @@ export default function App() {
     {(operationError || workspace.error) && <div className="warning-banner" role="alert"><span>{operationError || workspace.error}</span>{workspace.error && <button onClick={workspace.retry}>Ponów zapis / odśwież</button>}<button onClick={() => setOperationError('')}>Zamknij</button></div>}
     {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
     {modal === 'preferences' && <PreferencesDialog preferences={preferences.preferences} onClose={() => setModal(undefined)} onSave={preferences.savePreferences} onReset={preferences.resetPreferences} />}
-    {modal === 'settings' && <Modal title="Ustawienia edytora" onClose={() => setModal(undefined)}><div className="modal-body">
-      <div className="settings-row"><span>Model</span><span className="muted">{screenplayModel}</span></div>
-      <div className="settings-row"><span>Czcionka scenariusza</span><span className="muted">Courier New · 12 pt</span></div>
-      <div className="settings-row"><span>Powiększenie widoku</span><div className="zoom-stepper"><IconButton label="Zmniejsz powiększenie" disabled={zoom <= 50} onClick={() => setZoom(value => value - 10)}><Minus size={15} /></IconButton><output aria-label="Powiększenie widoku">{zoom}%</output><IconButton label="Zwiększ powiększenie" disabled={zoom >= 200} onClick={() => setZoom(value => value + 10)}><Plus size={15} /></IconButton><IconButton label="Przywróć powiększenie 100%" disabled={zoom === 100} onClick={() => setZoom(100)}><RotateCcw size={14} /></IconButton></div></div>
-      <div className="settings-row"><span>Zapis</span><span className="muted">PostgreSQL</span></div></div><div className="modal-actions"><button className="button primary" onClick={() => setModal(undefined)}>Gotowe</button></div></Modal>}
+    {modal === 'settings' && <EditorSettingsDialog settings={editor.settings} onChange={editor.updateSettings} onClose={() => setModal(undefined)} />}
     {modal === 'export' && project && <Modal title="Eksport scenariusza" onClose={() => setModal(undefined)}><div className="modal-body"><p>{project.title}</p><label className="field-label spaced" htmlFor="export-format">Format pliku</label><select id="export-format" className="field-input" value={exportFormat} onChange={event => setExportFormat(event.target.value as 'fountain' | 'json')}><option value="fountain">Fountain (.fountain)</option><option value="json">Projekt z kartami postaci (.json)</option></select></div><div className="modal-actions"><button className="button" onClick={() => setModal(undefined)}>Anuluj</button><button className="button primary" onClick={() => void perform(async () => { await workspace.flush(); exportProject(project, exportFormat); setModal(undefined); })}>Pobierz plik</button></div></Modal>}
     {(modal === 'project' || (modal === 'editProject' && editingProject)) && <ProjectDialog key={modal === 'editProject' ? editingProject?.id : 'new-project'} project={modal === 'editProject' ? editingProject : undefined} onClose={() => setModal(undefined)} onSave={async details => {
       if (modal === 'editProject' && editingProject) await workspace.editProject(editingProject.id, details);

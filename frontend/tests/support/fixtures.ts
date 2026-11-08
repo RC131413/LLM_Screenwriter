@@ -1,8 +1,17 @@
-import type { ApiCharacter, ApiPreferences, ApiPrompt, ApiSceneVariant, ApiUser, ApiWorkspace } from '../../src/services/api';
+import type { ApiCharacter, ApiPreferences, ApiPrompt, ApiSceneVariant, ApiStatistics, ApiUser, ApiWorkspace } from '../../src/services/api';
 
 // Test-only DTOs: runtime components never import this module.
 export const timestamp = '2026-10-20T12:00:00Z';
 const timestamps = { created_at: timestamp, updated_at: timestamp };
+
+export function statisticsFixture(overrides: Partial<ApiStatistics> = {}): ApiStatistics {
+  return {
+    projects: 1, acts: 2, scenes: 1, characters: 2, generation_requests: 0, generation_runs: 0,
+    completed_runs: 0, variants: 0, total_generation_duration_ms: 0, prompt_activity: [],
+    project_generations: [{ project_id: 1, completed_runs: 0, failed_runs: 0 }], recent_activity: [],
+    ...overrides,
+  };
+}
 
 export function preferencesFixture(): ApiPreferences {
   return {

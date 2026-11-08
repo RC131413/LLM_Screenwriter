@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from '../../src/App';
 import type { ApiActiveGeneration } from '../../src/services/api';
-import { preferencesFixture, userFixture, variantFixture } from '../support/fixtures';
+import { preferencesFixture, statisticsFixture, userFixture, variantFixture } from '../support/fixtures';
 import { deferred, jsonResponse } from '../support/http';
 import { workspaceHttp } from '../support/workspaceHttp';
 
@@ -14,6 +14,7 @@ describe('application → hooks → API client → HTTP', () => {
     const http = workspaceHttp((call, workspace) => {
       if (call.path === '/users/me') return jsonResponse(userFixture());
       if (call.path === '/users/me/preferences') return jsonResponse(preferencesFixture());
+      if (call.path === '/users/me/statistics') return jsonResponse(statisticsFixture());
       if (call.path === '/projects/1/actions/open') return jsonResponse(workspace.project);
       if (call.path === '/generation/active') return jsonResponse(active);
       if (call.path === '/scenes/20/generate') {

@@ -19,9 +19,10 @@ interface Props {
   onLogout: () => void;
   onPasswordChange: (data: ChangePasswordInput) => Promise<unknown>;
   projects: Project[];
+  onPrepare?: () => Promise<void>;
 }
 
-export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, preferences, onPreferencesSave, onPreferencesReset, onLogout, onPasswordChange, projects }: Props) {
+export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, preferences, onPreferencesSave, onPreferencesReset, onLogout, onPasswordChange, projects, onPrepare }: Props) {
   const [preferencesVersion, setPreferencesVersion] = useState(0);
   const tabs = [
     { id: 'account', label: 'Moje konto', icon: UserRound },
@@ -45,7 +46,7 @@ export function SettingsPage({ tab, onTab, returnHref, profile, onProfileSave, p
           onTab(tabs[next].id); document.getElementById(`settings-tab-${tabs[next].id}`)?.focus();
         }}><item.icon size={16} /><span>{item.label}</span></button>)}</div>
         <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
-          {tab === 'account' ? <AccountSettings profile={profile} onSave={onProfileSave} onLogout={onLogout} onPasswordChange={onPasswordChange} /> : tab === 'ai' ? <section className="settings-preferences"><PreferencesForm key={preferencesVersion} preferences={preferences} onSave={onPreferencesSave} onReset={onPreferencesReset} onCancel={() => setPreferencesVersion(value => value + 1)} /></section> : <StatisticsView projects={projects} />}
+          {tab === 'account' ? <AccountSettings profile={profile} onSave={onProfileSave} onLogout={onLogout} onPasswordChange={onPasswordChange} /> : tab === 'ai' ? <section className="settings-preferences"><PreferencesForm key={preferencesVersion} preferences={preferences} onSave={onPreferencesSave} onReset={onPreferencesReset} onCancel={() => setPreferencesVersion(value => value + 1)} /></section> : <StatisticsView projects={projects} onPrepare={onPrepare} />}
         </div>
       </div>
     </main>

@@ -268,6 +268,17 @@ export interface ApiStatistics {
   variants: number;
   total_generation_duration_ms: number;
   prompt_activity: { date: string; count: number }[];
+  project_generations: { project_id: number; completed_runs: number; failed_runs: number }[];
+  recent_activity: ApiRecentActivity[];
+}
+
+export interface ApiRecentActivity {
+  id: string;
+  project_id: number;
+  project_title: string;
+  action: 'create' | 'edit' | 'open' | 'favorite' | 'unfavorite' | 'archive' | 'unarchive' | 'trash' | 'restore' |
+    'generation_completed' | 'generation_failed' | 'generation_cancelled';
+  occurred_at: string;
 }
 
 export interface ApiValidationIssue {
@@ -453,7 +464,9 @@ export const accountApi = {
   getPreferences: (options: CallOptions = {}) => apiRequest<ApiPreferences>('users/me/preferences', options),
   savePreferences: (data: PreferencesInput, options: CallOptions = {}) =>
     apiRequest<ApiPreferences>('users/me/preferences', { ...options, method: 'PUT', body: data }),
-  getStatistics: (options: CallOptions = {}) => apiRequest<ApiStatistics>('users/me/statistics', options),
+  getStatistics: (options: CallOptions = {}) => apiRequest<ApiStatistics>('users/me/statistics', {
+    ...options, query: { time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+  }),
 };
 
 export const projectsApi = {

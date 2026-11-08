@@ -9,8 +9,7 @@ from django.contrib.auth import authenticate, login, logout, update_session_auth
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, Sum
-from django.db.models.functions import TruncDate
+from django.db.models import Q
 from django.http import FileResponse, HttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
@@ -28,6 +27,7 @@ from backend.agents.services import generate_variants_for_run, scene_context
 
 from . import scheams as s
 from .progress import generation_progress
+from .statistics import account_statistics, activity_metadata
 from .exporting import export_fdx, export_fountain, project_screenplay
 from .screenplay_pdf import export_pdf
 from .screenplay import UNCLEAR_PROMPT, append_variant, obviously_unintelligible
@@ -165,23 +165,8 @@ def update_preferences(request, payload: s.PreferencesIn):
 
 
 @api.get('/users/me/statistics', response=s.StatisticsOut, tags=['Statistics'])
-def statistics(request):
-    runs = owned(GenerationRun, request.auth)
-    prompts = owned(SceneGenerationRequest, request.auth)
-    activity = prompts.filter(created_at__gte=timezone.now() - timedelta(days=30)).annotate(
-        date=TruncDate('created_at'),
-    ).values('date').annotate(count=Count('pk')).order_by('date')
-    return {
-        'projects': owned(Project, request.auth).count(),
-        'acts': owned(Act, request.auth).count(),
-        'scenes': owned(Scene, request.auth).count(),
-        'characters': owned(Character, request.auth).count(),
-        'generation_requests': prompts.count(), 'generation_runs': runs.count(),
-        'completed_runs': runs.filter(status='completed').count(),
-        'variants': owned(SceneVariant, request.auth).count(),
-        'total_generation_duration_ms': runs.aggregate(total=Sum('total_duration_ms'))['total'] or 0,
-        'prompt_activity': list(activity),
-    }
+def statistics(request, time_zone: str = 'Europe/Warsaw'):
+    return account_statistics(request.auth, time_zone)
 
 
 @api.get('/projects', response=list[s.ProjectOut], tags=['Projects'])
@@ -209,7 +194,8 @@ def list_projects(request, collection: Literal['all', 'recent', 'favorites', 'ar
 @api.post('/projects', response={201: s.ProjectOut}, tags=['Projects'])
 @transaction.atomic
 def create_project(request, payload: s.ProjectIn):
-    return 201, save_validated(Project(user=request.auth, **payload.model_dump()))
+    project = Project(user=request.auth, **payload.model_dump())
+    return 201, save_validated(project, {'metadata': activity_metadata(project, 'create')})
 
 
 @api.get('/projects/{project_id}', response=s.ProjectOut, tags=['Projects'])
@@ -220,7 +206,10 @@ def get_project(request, project_id: s.PositiveId):
 @api.patch('/projects/{project_id}', response=s.ProjectOut, tags=['Projects'])
 @transaction.atomic
 def update_project(request, project_id: s.PositiveId, payload: PatchDict[s.ProjectIn]):
-    return save_validated(lock_project(request.auth, project_id), payload)
+    project = lock_project(request.auth, project_id)
+    changes = dict(payload)
+    changes['metadata'] = activity_metadata(project, 'edit', metadata=changes.get('metadata', project.metadata))
+    return save_validated(project, changes)
 
 
 @api.delete('/projects/{project_id}', response={204: None}, tags=['Projects'])
@@ -236,8 +225,9 @@ def delete_project(request, project_id: s.PositiveId):
 def project_action(request, project_id: s.PositiveId,
                    action: Literal['favorite', 'unfavorite', 'archive', 'unarchive', 'trash', 'restore', 'open']):
     project = lock_project(request.auth, project_id)
-    metadata = dict(project.metadata)
-    now = timezone.now().isoformat()
+    opened = timezone.now()
+    metadata = activity_metadata(project, action, at=opened)
+    now = opened.isoformat()
     changes = {
         'favorite': {'is_favorite': True}, 'unfavorite': {'is_favorite': False},
         'archive': {'archived_at': now}, 'unarchive': {'archived_at': None},

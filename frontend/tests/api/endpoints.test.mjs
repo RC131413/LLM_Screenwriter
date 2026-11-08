@@ -17,7 +17,7 @@ const endpointCases = [
   ['PATCH', 'users/me/profile', () => api.account.updateProfile({ display_name: 'Writer' })],
   ['GET', 'users/me/preferences', () => api.account.getPreferences()],
   ['PUT', 'users/me/preferences', () => api.account.savePreferences({})],
-  ['GET', 'users/me/statistics', () => api.account.getStatistics()],
+  ['GET', `users/me/statistics?time_zone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`, () => api.account.getStatistics()],
   ['GET', 'projects', () => api.projects.list()],
   ['POST', 'projects', () => api.projects.create({ title: 'Film' })],
   ['GET', 'projects/1', () => api.projects.get(1)],

@@ -356,6 +356,21 @@ class ActivityOut(Schema):
     count: int
 
 
+class ProjectGenerationStatisticsOut(Schema):
+    project_id: int
+    completed_runs: int
+    failed_runs: int
+
+
+class RecentActivityOut(Schema):
+    id: str
+    project_id: int
+    project_title: str
+    action: Literal['create', 'edit', 'open', 'favorite', 'unfavorite', 'archive', 'unarchive', 'trash', 'restore',
+                    'generation_completed', 'generation_failed', 'generation_cancelled']
+    occurred_at: datetime
+
+
 class StatisticsOut(Schema):
     projects: int
     acts: int
@@ -367,3 +382,5 @@ class StatisticsOut(Schema):
     variants: int
     total_generation_duration_ms: int
     prompt_activity: list[ActivityOut]
+    project_generations: list[ProjectGenerationStatisticsOut]
+    recent_activity: list[RecentActivityOut]

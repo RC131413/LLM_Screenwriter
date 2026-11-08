@@ -365,7 +365,7 @@ export function initializeCsrf(options: CallOptions = {}): Promise<CsrfResponse>
   return waitWithSignal(csrfBootstrap, options.signal);
 }
 
-export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+async function fetchApiResponse(path: string, options: ApiRequestOptions = {}): Promise<Response> {
   const { method: requestedMethod = 'GET', body, query, headers: suppliedHeaders, ...init } = options;
   const method = requestedMethod.toUpperCase();
   const url = apiUrl(path, query);
@@ -388,23 +388,42 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     ...init, cache: init.cache ?? 'no-store', method, headers, body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'include', mode: 'cors', redirect: 'error',
   });
-  if (response.ok && (response.status === 204 || response.status === 205 || method === 'HEAD')) {
-    return undefined as T;
-  }
-  const text = await response.text();
-  let data: unknown;
-  try { data = JSON.parse(text); }
-  catch {
-    if (response.ok) throw new ApiError(response.status, { detail: 'The API returned invalid JSON.' });
-    data = text;
-  }
   if (!response.ok) {
+    const text = await response.text();
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { data = text; }
     if (response.status === 401 && typeof window !== 'undefined' && !['auth/login', 'auth/register'].includes(url.pathname.slice(new URL(API_BASE_URL).pathname.length))) {
       window.dispatchEvent(new Event('api:unauthorized'));
     }
     throw new ApiError(response.status, data);
   }
+  return response;
+}
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const response = await fetchApiResponse(path, options);
+  if (response.status === 204 || response.status === 205 || options.method?.toUpperCase() === 'HEAD') return undefined as T;
+  let data: unknown;
+  try { data = JSON.parse(await response.text()); }
+  catch { throw new ApiError(response.status, { detail: 'The API returned invalid JSON.' }); }
   return data as T;
+}
+
+export type ScreenplayExportFormat = 'fountain' | 'fdx' | 'pdf';
+export interface ApiDownload { blob: Blob; filename: string }
+
+async function downloadRequest(path: string, format: ScreenplayExportFormat, options: CallOptions): Promise<ApiDownload> {
+  const response = await fetchApiResponse(path, {
+    ...options, query: { format }, headers: { Accept: 'application/pdf, application/xml, text/plain, application/json' },
+  });
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  let filename = /filename="([^"\r\n]+)"/i.exec(disposition)?.[1] ?? `scenariusz.${format}`;
+  const encoded = /filename\*=utf-8''([^;\r\n]+)/i.exec(disposition)?.[1];
+  if (encoded) {
+    try { filename = decodeURIComponent(encoded); } catch { /* Keep the safe fallback. */ }
+  }
+  filename = filename.split(/[\\/]/).at(-1)?.replace(/[\u0000-\u001f\u007f]/g, '') || `scenariusz.${format}`;
+  return { blob: await response.blob(), filename };
 }
 
 function id(value: ApiId): string {
@@ -451,6 +470,8 @@ export const projectsApi = {
     apiRequest<ApiProject>(`projects/${id(projectId)}/actions/${encodeURIComponent(action)}`, { ...options, method: 'POST' }),
   workspace: (projectId: ApiId, options: CallOptions = {}) =>
     apiRequest<ApiWorkspace>(`projects/${id(projectId)}/workspace`, options),
+  export: (projectId: ApiId, format: ScreenplayExportFormat, options: CallOptions = {}) =>
+    downloadRequest(`projects/${id(projectId)}/export`, format, options),
 };
 
 export const actsApi = {

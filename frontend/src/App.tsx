@@ -17,6 +17,7 @@ import { ProjectDialog } from './components/ProjectDialog';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { PreferencesDialog } from './components/PreferencesDialog';
 import { EditorSettingsDialog } from './components/EditorSettingsDialog';
+import { ExportDialog } from './components/ExportDialog';
 import { SettingsPage } from './components/SettingsPage';
 import { AuthPage } from './components/AuthPage';
 import { RequestState } from './components/RequestState';
@@ -48,7 +49,6 @@ export default function App() {
   const [deletingProjectId, setDeletingProjectId] = useState<string>();
   const editingProject = workspace.projects.find(item => item.id === editingProjectId);
   const deletingProject = workspace.projects.find(item => item.id === deletingProjectId);
-  const [exportFormat, setExportFormat] = useState<'fountain' | 'json'>('fountain');
   const [notice, setNotice] = useState('');
   const [operationError, setOperationError] = useState('');
 
@@ -114,7 +114,8 @@ export default function App() {
     {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
     {modal === 'preferences' && <PreferencesDialog preferences={preferences.preferences} onClose={() => setModal(undefined)} onSave={preferences.savePreferences} onReset={preferences.resetPreferences} />}
     {modal === 'settings' && <EditorSettingsDialog settings={editor.settings} onChange={editor.updateSettings} onClose={() => setModal(undefined)} />}
-    {modal === 'export' && project && <Modal title="Eksport scenariusza" onClose={() => setModal(undefined)}><div className="modal-body"><p>{project.title}</p><label className="field-label spaced" htmlFor="export-format">Format pliku</label><select id="export-format" className="field-input" value={exportFormat} onChange={event => setExportFormat(event.target.value as 'fountain' | 'json')}><option value="fountain">Fountain (.fountain)</option><option value="json">Projekt z kartami postaci (.json)</option></select></div><div className="modal-actions"><button className="button" onClick={() => setModal(undefined)}>Anuluj</button><button className="button primary" onClick={() => void perform(async () => { await workspace.flush(); exportProject(project, exportFormat); setModal(undefined); })}>Pobierz plik</button></div></Modal>}
+    {modal === 'export' && project && <ExportDialog title={project.title} onClose={() => setModal(undefined)}
+      onExport={async format => { await workspace.flush(); await exportProject(project.id, format); }} />}
     {(modal === 'project' || (modal === 'editProject' && editingProject)) && <ProjectDialog key={modal === 'editProject' ? editingProject?.id : 'new-project'} project={modal === 'editProject' ? editingProject : undefined} onClose={() => setModal(undefined)} onSave={async details => {
       if (modal === 'editProject' && editingProject) await workspace.editProject(editingProject.id, details);
       else { const next = await workspace.createProject(details); setDashboardCollection('all'); navigation.openProject(next.id); setSceneId(undefined); setView('outline'); }

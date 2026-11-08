@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Info } from 'lucide-react';
 
 /** A hover/focus hint that stays above dialogs and their scrolling form bodies. */
-export function FieldHelp({ id, label, text }: { id: string; label: string; text: string }) {
+export function FieldHelp({ id, label, text }: { id: string; label: string; text: ReactNode }) {
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLSpanElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);

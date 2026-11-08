@@ -83,6 +83,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_URLS_REGEX = r'^/api(?:/|$)'
 CORS_ALLOW_HEADERS = list(default_headers)  # Includes content-type and x-csrftoken.
 CORS_ALLOW_METHODS = list(default_methods)
+CORS_EXPOSE_HEADERS = ['Content-Disposition']  # Download filename for the React export client.
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False

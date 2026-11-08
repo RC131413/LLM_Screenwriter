@@ -1,6 +1,7 @@
 """Session-authenticated AgentDraft API. Engine-produced records are read-only."""
 
 from datetime import timedelta
+from io import BytesIO
 from typing import Literal
 from uuid import uuid4
 
@@ -10,10 +11,11 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncDate
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.text import slugify
 from ninja import NinjaAPI, PatchDict
 from ninja.errors import HttpError
 from ninja.pagination import paginate
@@ -26,6 +28,8 @@ from backend.agents.services import generate_variants_for_run, scene_context
 
 from . import scheams as s
 from .progress import generation_progress
+from .exporting import export_fdx, export_fountain, project_screenplay
+from .screenplay_pdf import export_pdf
 from .screenplay import UNCLEAR_PROMPT, append_variant, obviously_unintelligible
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
@@ -251,6 +255,21 @@ def workspace(request, project_id: s.PositiveId):
         'project': project, 'acts': project.acts.all(), 'characters': project.characters.all(),
         'scenes': project.scenes.prefetch_related('cast_members'),
     }
+
+
+@api.get('/projects/{project_id}/export', tags=['Projects'])
+def export_project(request, project_id: s.PositiveId, format: Literal['fountain', 'fdx', 'pdf']):
+    project = get_owned(Project, request.auth, project_id)
+    script = project_screenplay(project)
+    render, content_type = {
+        'fountain': (export_fountain, 'text/plain; charset=utf-8'),
+        'fdx': (export_fdx, 'application/xml; charset=utf-8'),
+        'pdf': (export_pdf, 'application/pdf'),
+    }[format]
+    filename = (slugify(project.title, allow_unicode=True)[:120] or 'scenariusz') + '.' + format
+    response = FileResponse(BytesIO(render(script)), as_attachment=True, filename=filename, content_type=content_type)
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 @api.get('/projects/{project_id}/acts', response=list[s.ActOut], tags=['Acts'])

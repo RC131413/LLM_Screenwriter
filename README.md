@@ -592,3 +592,29 @@ or reverse proxy is more reliable. See [Django cookie settings](https://docs.dja
 
 CORS integration and credential tests are in `backend/test/test_cors.py` and run
 with the rest of the backend test suite. No migrations are required.
+
+## Project exports
+
+The editor's **Eksportuj** dialog downloads Fountain, Final Draft (`.fdx`), PDF
+or the existing JSON project (including character profiles). Pending scene edits
+must finish saving before export; save/download failures stay visible in the dialog.
+
+`GET /api/projects/{id}/export?format=fountain|fdx|pdf` requires the owner's
+authenticated session and returns an attachment. `Content-Disposition` is exposed
+through CORS. Exports follow the act and scene order and use `editor_metadata.blocks`
+for element types; legacy plain text remains Action. Export never invokes the LLM.
+
+PDF uses ReportLab and embedded Courier Prime 12pt with Polish glyphs, independently
+of editor zoom. It uses US Letter (8.5 x 11in), a 1.5in left margin, 1in top/bottom/right
+margins, 12pt line spacing, uppercase headings/cues, and fixed element positions:
+Action/heading 1.5in, Character 3.7in, Parenthetical 3.1in, Dialogue 2.5in (3.5in width).
+Transitions end at the 1in right margin. The title page and first script page have no
+page number; later pages have right-aligned numbers with a period. Long speeches use
+`(MORE)` and repeated character cues with `(CONT'D)` across page breaks. Headings,
+cues and parentheticals stay with the following text when possible.
+
+Courier Prime's redistribution license is in `backend/assets/fonts/courier-prime/OFL.txt`.
+Font assets are already included by the existing Dockerfile's `COPY backend/`.
+Install `requirements-dev.txt` to run PDF inspection tests (adds pypdf); the runtime
+needs only `requirements.txt`. Export coverage is in `backend/test/test_project_exports.py`
+and `frontend/tests/integration/ProjectExport.test.tsx`.

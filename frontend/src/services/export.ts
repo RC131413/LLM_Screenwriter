@@ -1,24 +1,29 @@
-import type { Project } from '../types';
+import { projectsApi } from './api';
+import type { ScreenplayExportFormat } from './api';
+import { toProject } from './workspaceData';
 
-export function exportProject(project: Project, format: 'fountain' | 'json') {
-  const content = format === 'json' ? JSON.stringify(project, null, 2) : [
-    `Title: ${project.title}`, 'Credit: Scenariusz', '',
-    ...project.scenes.flatMap(scene => [
-      `.${scene.heading}`, '',
-      ...scene.blocks.flatMap(block => [
-        block.type === 'character' ? `@${block.text.toLocaleUpperCase('pl')}` :
-        block.type === 'transition' ? `>${block.text}` :
-        block.type === 'parenthetical' ? `(${block.text.replace(/^\(|\)$/g, '')})` : block.text,
-        ...(block.type === 'character' || block.type === 'parenthetical' ? [] : ['']),
-      ]), '',
-    ]),
-  ].join('\n');
-  const url = URL.createObjectURL(new Blob([content], { type: format === 'json' ? 'application/json;charset=utf-8' : 'text/plain;charset=utf-8' }));
+export type ExportFormat = ScreenplayExportFormat | 'json';
+
+export async function exportProject(projectId: string, format: ExportFormat) {
+  let file;
+  if (format === 'json') {
+    // Read after flush as well: never download an outdated render's snapshot.
+    const project = toProject(await projectsApi.workspace(Number(projectId)));
+    file = {
+      blob: new Blob([JSON.stringify(project, null, 2)], { type: 'application/json;charset=utf-8' }),
+      filename: `${project.title.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase() || 'projekt'}.json`,
+    };
+  } else {
+    file = await projectsApi.export(Number(projectId), format);
+  }
+  const url = URL.createObjectURL(file.blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${project.title.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}.${format}`;
+  link.download = file.filename;
   document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try { link.click(); }
+  finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }

@@ -311,6 +311,8 @@ h1, h2, h3, p { margin: 0; }
 .zoom-stepper { display: flex; align-items: center; gap: 4px; }
 .zoom-stepper output { width: 40px; text-align: center; font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .export-project-name { font-size: 19px; font-weight: 550; margin-bottom: 6px; overflow-wrap: anywhere; }
+.export-format-help-item, .export-format-help-item > strong, .export-format-help-item > span { display: block; }
+.export-format-help-item + .export-format-help-item { margin-top: 8px; }
 .variant-preview { padding: 25px 30px; max-height: 55dvh; overflow: auto; font: 12pt/1.65 'Courier New', Courier, monospace; overflow-wrap: anywhere; }
 .variant-preview > strong { display: block; margin-bottom: 22px; }
 .variant-preview p { margin-bottom: 18px; }

@@ -18,6 +18,31 @@ from .director import ScenePlan
 SCENE_WRITE_TIMEOUT = 300
 
 
+def writing_preferences_instruction(context: dict[str, Any]) -> str:
+    style = context.get('writing_style_preferences', {})
+    action = (
+        'plastyczne, z konkretnym detalem obrazu i dźwięku, bez rozwlekłości'
+        if style.get('stage_directions_style') == 'literary_descriptive'
+        else 'zwięzłe i rzeczowe, krótkie zdania i akapity'
+    )
+    direction_policies = {
+        'ignore': 'parenthetical zawsze null.',
+        'sparingly': 'parenthetical opcjonalne: krótka wskazówka tylko gdy intencja lub sposób mówienia '
+                    'nie wynika z kwestii. Bez mechanicznych powtórzeń ani wskazówki przy każdej kwestii.',
+        'standard': 'parenthetical: proponuj krótkie, naturalne wskazówki aktorskie w istotnych momentach '
+                    'dialogu, np. zmianach intencji, tempa lub sposobu mówienia. Dobieraj je do sytuacji; '
+                    'bez wskazówki przy każdej kwestii, oczywistych emocji i mechanicznych powtórzeń.',
+    }
+    directions = direction_policies.get(style.get('parentheticals'), direction_policies['sparingly'])
+    tone = json.dumps(style.get('dialogue_tone', 'Neutralny, realistyczny'), ensure_ascii=False)
+    return (
+        f'Opisy akcji: {action}; tylko to, co widać lub słychać, bez opisywania myśli. '
+        f'Domyślny ton dialogów: {tone}. Dopasuj go do sytuacji; polecenie autora i indywidualny '
+        f'głos postaci mają pierwszeństwo. Nie wymuszaj rozmowy. {directions} '
+        'Czynności zapisuj w action, nie w nawiasach. '
+    )
+
+
 class SceneRevision(TypedDict):
     previous_draft: str
     feedback: str
@@ -44,7 +69,7 @@ WRITE_SCENE = ChatPromptTemplate.from_messages([
      'Kontynuuj context.scene bez powtórzeń, w tym samym miejscu i czasie. '
      'Bloki bez nagłówków, przejść, numeracji i komentarzy. '
      '{revision_instruction}'
-     'Uwzględnij variant_approach, ton dialogów i styl akcji z context. '
+     'Uwzględnij variant_approach. {writing_instruction}'
      '{heading_instruction}{format_instruction}'),
     ('human', '{payload}'),
 ])
@@ -104,6 +129,7 @@ class ScenaristAgent:
         with tracing_context(enabled=False):
             generated = chain.invoke({
                 'payload': json.dumps(payload, ensure_ascii=False),
+                'writing_instruction': writing_preferences_instruction(context),
                 'speaker_instruction': speaker_instruction,
                 'heading_instruction': heading_instruction,
                 'revision_instruction': (

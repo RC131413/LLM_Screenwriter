@@ -71,12 +71,12 @@ export interface UserPreferences {
   writing_style_preferences: {
     stage_directions_style: 'concise_technical' | 'literary_descriptive';
     dialogue_tone: string;
-    parentheticals: 'sparingly' | 'ignore';
+    parentheticals: 'ignore' | 'sparingly' | 'standard';
   };
   llm_preferences: {
     model_name: 'Bielik 11B (Lokalny)';
     temperature: number;
-    max_tokens: number;
+    readonly max_tokens: 2048;
   };
 }
 export interface PromptHistoryEntry {

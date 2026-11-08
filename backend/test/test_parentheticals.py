@@ -124,3 +124,20 @@ class ParentheticalApiTests(ApiTestCase):
         self.assertEqual(len([b for b in variant['critic_metadata']['blocks'] if b['type'] == 'dialogue']), 4)
         self.assertNotIn('(szeptem)', variant['generated_full_text'])
         generate.assert_called_once()
+
+    @patch_writer(return_value=REPEATED)
+    def test_standard_mode_round_trips_and_retains_necessary_repetition_filtering(self, generate):
+        preferences = self.assert_status(self.send('put', '/users/me/preferences', {
+            'writing_style_preferences': {'parentheticals': 'standard'},
+        }), 200).json()
+        self.assertEqual(preferences['writing_style_preferences']['parentheticals'], 'standard')
+        saved = self.assert_status(self.send('get', '/users/me/preferences'), 200).json()
+        self.assertEqual(saved['writing_style_preferences']['parentheticals'], 'standard')
+        variant = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
+            'user_prompt': 'Maciek rozpoznaje znak na kuli.',
+        }), 201).json()
+        self.assertEqual([b['text'] for b in variant['critic_metadata']['blocks'] if b['type'] == 'parenthetical'],
+                         ['(szeptem)', '(głośno)'])
+        self.assertEqual(len([b for b in variant['critic_metadata']['blocks'] if b['type'] == 'dialogue']), 4)
+        self.assertIn('proponuj krótkie, naturalne wskazówki', generate.call_args.kwargs['messages'][0]['content'])
+        generate.assert_called_once()

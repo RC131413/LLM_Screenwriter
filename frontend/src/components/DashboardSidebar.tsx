@@ -1,8 +1,9 @@
-import { Archive, Clock3, FileText, FolderOpen, Settings, Star, Trash2, X } from 'lucide-react';
+import { Archive, Clock3, FileText, FolderOpen, Star, Trash2, X } from 'lucide-react';
 import type { DashboardCollection, Project } from '../types';
 import { collectionLabels, projectsInCollection } from '../services/projectLibrary';
 import { IconButton } from './IconButton';
 import { projectHref } from '../hooks/useProjectNavigation';
+import { AiSettingsButton } from './AiSettingsButton';
 
 interface Props {
   projects: Project[];
@@ -34,6 +35,6 @@ export function DashboardSidebar({ projects, collection, onCollection, onOpen, o
         event.preventDefault(); onOpen(project.id);
       }}><FileText size={14} /><span>{project.title}</span></a>)}</nav> : <p>Brak ostatnich projektów.</p>}
     </div>
-    <div className="dashboard-sidebar-footer"><button className="dashboard-settings-button" onClick={onSettings}><Settings size={18} /><span>Ustawienia i AI</span></button></div>
+    <div className="dashboard-sidebar-footer"><AiSettingsButton onClick={onSettings} /></div>
   </aside>;
 }

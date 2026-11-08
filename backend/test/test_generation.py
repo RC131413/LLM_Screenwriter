@@ -54,12 +54,12 @@ class GenerationTests(ApiTestCase):
 
     def test_prompt_uses_saved_engine_preferences(self):
         self.assert_status(self.send('put', '/users/me/preferences', {
-            'llm_preferences': {'temperature': 0.2, 'max_tokens': 512},
+            'llm_preferences': {'temperature': 0.2},
         }), 200)
         prompt = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/prompts', {
             'user_prompt': 'Use the saved settings.',
         }), 201).json()
-        self.assertEqual(prompt['generation_parameters'], {'temperature': 0.2, 'max_tokens': 512})
+        self.assertEqual(prompt['generation_parameters'], {'temperature': 0.2, 'max_tokens': 2048})
         self.assertEqual(prompt['context_snapshot']['llm_preferences']['temperature'], 0.2)
 
     def test_variant_with_mismatched_run_is_not_applied(self):

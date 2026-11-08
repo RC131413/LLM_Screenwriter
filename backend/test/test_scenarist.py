@@ -34,6 +34,27 @@ class ScenaristAgentTests(SimpleTestCase):
         }
         return httpx.Response(200, text=json.dumps(chunk) + '\n')
 
+    def test_writing_preferences_are_explicit_instructions_for_each_style(self):
+        for style, policy, expected_action, expected_direction in [
+            ('concise_technical', 'sparingly', 'zwięzłe i rzeczowe', 'parenthetical opcjonalne'),
+            ('literary_descriptive', 'ignore', 'detalem obrazu i dźwięku', 'parenthetical zawsze null'),
+            ('concise_technical', 'standard', 'zwięzłe i rzeczowe', 'proponuj krótkie, naturalne wskazówki'),
+        ]:
+            with self.subTest(style=style, policy=policy):
+                context = {'writing_style_preferences': {
+                    'stage_directions_style': style, 'dialogue_tone': 'Lekki, ironiczny', 'parentheticals': policy,
+                }}
+                original = deepcopy(context)
+                self.scenarist.write_scene(user_prompt='Marta rusza na peron.', context=context,
+                                          beats=['Marta rusza na peron.'])
+                system = self.requests[-1]['messages'][0]['content']
+                self.assertIn(expected_action, system)
+                self.assertIn(expected_direction, system)
+                self.assertIn('Lekki, ironiczny', system)
+                self.assertIn('indywidualny głos postaci mają pierwszeństwo', system)
+                self.assertIn('Nie wymuszaj rozmowy', system)
+                self.assertEqual(context, original)
+
     def test_sends_ordered_plan_and_voice_profiles_and_renders_screenplay(self):
         context = {
             'characters': [

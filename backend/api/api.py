@@ -31,7 +31,7 @@ from .models import (
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
 )
 from .services import (
-    get_owned, lock_project, owned, profile_for, prompt_snapshot, save_validated, validate_avatar,
+    get_owned, lock_project, owned, preferences_for, profile_for, prompt_snapshot, save_validated, validate_avatar,
 )
 
 
@@ -148,18 +148,7 @@ def update_profile(request, payload: PatchDict[s.ProfileIn]):
 
 @api.get('/users/me/preferences', response=s.PreferencesIn, tags=['Preferences'])
 def get_preferences(request):
-    profile = profile_for(request.auth)
-    defaults = s.PreferencesIn().model_dump()
-    # Existing ERD rows may contain empty JSON objects.
-    return {
-        'writing_style_preferences': {
-            **defaults['writing_style_preferences'], **profile.writing_style_preferences,
-        },
-        'llm_preferences': {
-            **defaults['llm_preferences'], **profile.llm_preferences,
-            'model_name': 'Bielik 11B (Lokalny)',
-        },
-    }
+    return preferences_for(profile_for(request.auth))
 
 
 @api.put('/users/me/preferences', response=s.PreferencesIn, tags=['Preferences'])

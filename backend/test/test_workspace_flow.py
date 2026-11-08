@@ -97,7 +97,7 @@ class WorkspaceFlowTests(TestCase):
         project, act, scene, character = self.create_workspace()
         self.request('put', '/users/me/preferences', {
             'writing_style_preferences': {'dialogue_tone': 'Dry and concise'},
-            'llm_preferences': {'temperature': 0.3, 'max_tokens': 1024},
+            'llm_preferences': {'temperature': 0.3},
         })
         prompt = self.request('post', f'/scenes/{scene["id"]}/prompts', {'user_prompt': 'Continue the scene.'}, status=201)
         self.request('patch', f'/characters/{character["id"]}', {'backstory': 'Changed afterwards.'})
@@ -110,7 +110,7 @@ class WorkspaceFlowTests(TestCase):
         self.assertEqual(stored['context_snapshot']['characters'][0]['backstory'], 'A former teacher.')
         self.assertEqual(stored['context_snapshot']['act']['summary'], 'The train leaves.')
         self.assertEqual(stored['context_snapshot']['project']['id'], project['id'])
-        self.assertEqual(stored['generation_parameters'], {'temperature': 0.3, 'max_tokens': 1024})
+        self.assertEqual(stored['generation_parameters'], {'temperature': 0.3, 'max_tokens': 2048})
         self.assertFalse(hasattr(SceneGenerationRequest.objects.get(pk=prompt['id']), 'run'))
 
     def test_dashboard_actions_preserve_metadata_and_round_trip_through_collections(self):

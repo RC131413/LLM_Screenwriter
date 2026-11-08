@@ -84,6 +84,21 @@ def profile_for(user):
     return profile
 
 
+def preferences_for(profile):
+    """Effective account settings, including defaults for older JSON profiles."""
+    defaults = PreferencesIn().model_dump()
+    return {
+        'writing_style_preferences': {
+            **defaults['writing_style_preferences'], **profile.writing_style_preferences,
+        },
+        'llm_preferences': {
+            **defaults['llm_preferences'], **profile.llm_preferences,
+            'model_name': defaults['llm_preferences']['model_name'],
+            'max_tokens': defaults['llm_preferences']['max_tokens'],
+        },
+    }
+
+
 def validate_avatar(value):
     if value:
         try:
@@ -96,6 +111,7 @@ def validate_avatar(value):
 
 def prompt_snapshot(scene, profile):
     # Freeze the inputs instead of trusting client-supplied foreign IDs or context.
+    preferences = preferences_for(profile)
     return {
         'project': {
             'id': scene.project_id, 'title': scene.project.title,
@@ -126,6 +142,5 @@ def prompt_snapshot(scene, profile):
             }
             for member in scene.cast_members.select_related('character').order_by('pk')
         ],
-        'writing_style_preferences': profile.writing_style_preferences,
-        'llm_preferences': profile.llm_preferences,
+        **preferences,
     }

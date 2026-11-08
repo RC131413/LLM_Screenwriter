@@ -167,7 +167,7 @@ class SceneGenerationTests(ApiTestCase):
            side_effect=ArchivistAgent.prepare_context)
     def test_requested_batch_sizes_share_one_fresh_archive_and_saved_temperature(self, generate, prepare_context):
         self.assert_status(self.send('put', '/users/me/preferences', {
-            'llm_preferences': {'temperature': 0.4, 'max_tokens': 512},
+            'llm_preferences': {'temperature': 0.4},
         }), 200)
         for count in (1, 2, 3):
             with self.subTest(count=count):
@@ -285,11 +285,11 @@ class SceneGenerationTests(ApiTestCase):
     @patch_writer(side_effect=generation_answer)
     def test_uses_saved_preferences_and_allows_valid_parameter_overrides(self, generate_text):
         self.assert_status(self.send('put', '/users/me/preferences', {
-            'llm_preferences': {'temperature': 0.3, 'max_tokens': 512},
+            'llm_preferences': {'temperature': 0.3},
         }), 200)
         self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {'user_prompt': 'Zmień scenę.'}), 201)
         self.assertEqual(generate_text.call_args.kwargs['temperature'], 0.3)
-        self.assertEqual(generate_text.call_args.kwargs['max_tokens'], 512)
+        self.assertEqual(generate_text.call_args.kwargs['max_tokens'], 2048)
         self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/generate', {
             'user_prompt': 'Skróć scenę.', 'generation_parameters': {'temperature': 0.2, 'max_tokens': 128},
         }), 201)

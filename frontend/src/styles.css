@@ -361,11 +361,20 @@ h1, h2, h3, p { margin: 0; }
 .preferences-tabs { display: flex; align-items: stretch; gap: 24px; border-bottom: 1px solid var(--border); padding: 0 23px; flex-shrink: 0; }
 .preferences-tabs > button { min-height: 46px; padding: 11px 0; border-bottom: 2px solid transparent; font-size: 12px; color: #909991; }
 .preferences-tabs > button[aria-selected="true"] { color: #365440; border-bottom-color: #55765f; font-weight: 550; }
-.preferences-body { height: 290px; flex-shrink: 1; }
-.preferences-checkbox { display: flex; align-items: center; gap: 10px; min-height: 34px; font-size: 12px; color: #68776c; cursor: pointer; }
-.preferences-checkbox input { width: 16px; height: 16px; margin: 0; accent-color: #55765f; }
+.preferences-body { height: 335px; flex-shrink: 1; }
+.preference-label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.preference-label > .field-label { margin: 0; }
+.preference-label.is-spaced { margin-top: 22px; }
+.preferences-tabs > .field-help { margin-left: auto; align-self: center; }
+.field-help { display: inline-flex; flex-shrink: 0; }
+.field-help-trigger { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 3px; color: #8c9890; }
+.field-help-trigger:hover, .field-help-trigger:focus-visible { color: #42604d; background: #edf2ee; }
+.field-help-trigger:focus-visible { outline: 2px solid #7f9b88; outline-offset: 1px; }
+.field-help-tooltip { position: fixed; inset: auto; z-index: 100; width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - 16px); overflow: auto; margin: 0; padding: 10px 12px; border: 1px solid #d9e1db; border-radius: 3px; background: #fff; color: #627267; font-family: inherit; font-size: 11px; font-weight: 400; line-height: 1.65; text-align: left; box-shadow: 0 4px 16px #23342a18; }
+.custom-dialogue-tone { margin-top: 12px; }
 .temperature-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 22px; }
 .temperature-heading .field-label { margin-bottom: 0; }
+.temperature-heading .preference-label { margin: 0; }
 .temperature-heading output { font-size: 12px; font-variant-numeric: tabular-nums; color: #52775f; }
 .temperature-slider { width: 100%; margin: 11px 0 7px; accent-color: #55765f; cursor: pointer; }
 .temperature-scale { display: flex; justify-content: space-between; font-size: 10px; color: #9aa69d; }

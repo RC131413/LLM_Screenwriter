@@ -62,13 +62,14 @@ class PasswordIn(InputSchema):
 class WritingStyleIn(InputSchema):
     stage_directions_style: Literal['concise_technical', 'literary_descriptive'] = 'concise_technical'
     dialogue_tone: str = Field(default='Neutralny, realistyczny', min_length=1, max_length=500)
-    parentheticals: Literal['sparingly', 'ignore'] = 'sparingly'
+    parentheticals: Literal['ignore', 'sparingly', 'standard'] = 'sparingly'
 
 
 class LlmPreferencesIn(InputSchema):
     model_name: ModelName = 'Bielik 11B (Lokalny)'
     temperature: float = Field(default=0.7, ge=0, le=1, multiple_of=0.1)
-    max_tokens: int = Field(default=2048, ge=1, le=32768)
+    # A technical budget for complete structured output, not a scene-length control.
+    max_tokens: Literal[2048] = 2048
 
 
 class PreferencesIn(InputSchema):

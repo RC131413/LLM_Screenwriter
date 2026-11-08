@@ -54,6 +54,7 @@ class AccountTests(ApiTestCase):
             {'llm_preferences': {'temperature': 1.1}},
             {'llm_preferences': {'temperature': 0.15}},
             {'llm_preferences': {'max_tokens': 0}},
+            {'llm_preferences': {'max_tokens': 512}},
             {'llm_preferences': {'model_name': 'another model'}},
             {'writing_style_preferences': {'parentheticals': 'always'}},
             {'writing_style_preferences': None},
@@ -68,6 +69,21 @@ class AccountTests(ApiTestCase):
         response = self.assert_status(self.send('get', '/users/me/preferences'), 200).json()
         self.assertEqual(response['llm_preferences']['model_name'], 'Bielik 11B (Lokalny)')
         self.assertEqual(response['writing_style_preferences']['parentheticals'], 'sparingly')
+
+    def test_legacy_token_limit_is_normalized_for_both_settings_and_generation(self):
+        UserProfile.objects.create(user=self.user,
+            writing_style_preferences={'dialogue_tone': 'Ciepły, empatyczny'},
+            llm_preferences={'temperature': 0.4, 'max_tokens': 64})
+        preferences = self.assert_status(self.send('get', '/users/me/preferences'), 200).json()
+        self.assertEqual(preferences['llm_preferences']['max_tokens'], 2048)
+        self.assertEqual(preferences['llm_preferences']['temperature'], 0.4)
+        self.assertEqual(preferences['writing_style_preferences']['stage_directions_style'], 'concise_technical')
+        prompt = self.assert_status(self.send('post', f'/scenes/{self.scene.pk}/prompts', {
+            'user_prompt': 'Kontynuuj rozmowę.',
+        }), 201).json()
+        self.assertEqual(prompt['generation_parameters'], {'temperature': 0.4, 'max_tokens': 2048})
+        self.assertEqual(prompt['context_snapshot']['llm_preferences']['max_tokens'], 2048)
+        self.assertEqual(prompt['context_snapshot']['writing_style_preferences'], preferences['writing_style_preferences'])
 
     def test_other_sessions_expire_after_password_change(self):
         another_session = Client(enforce_csrf_checks=True)

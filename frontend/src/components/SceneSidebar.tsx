@@ -3,9 +3,10 @@ import { useState } from 'react';
 import type { Project } from '../types';
 import { formatAct } from '../types';
 import { IconButton } from './IconButton';
+import { AiSettingsButton } from './AiSettingsButton';
 
-interface Props { project: Project; sceneId: string | undefined; onSelect: (id: string) => void; onClose: () => void }
-export function SceneSidebar({ project, sceneId, onSelect, onClose }: Props) {
+interface Props { project: Project; sceneId: string | undefined; onSelect: (id: string) => void; onClose: () => void; onSettings: () => void }
+export function SceneSidebar({ project, sceneId, onSelect, onClose, onSettings }: Props) {
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<number[]>([]);
   const visible = project.scenes.filter(scene => `${scene.title} ${scene.heading}`.toLocaleLowerCase('pl').includes(query.toLocaleLowerCase('pl')));
@@ -25,5 +26,6 @@ export function SceneSidebar({ project, sceneId, onSelect, onClose }: Props) {
       {query && visible.length === 0 && <p className="empty-search">Brak pasujących scen.</p>}
     </nav>
     <div className="sidebar-bottom"><span className="eyebrow">LOGLINE</span><p>{project.logline}</p></div>
+    <div className="dashboard-sidebar-footer"><AiSettingsButton onClick={onSettings} /></div>
   </aside>;
 }

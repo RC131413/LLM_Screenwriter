@@ -243,6 +243,33 @@ class CancelGenerationIn(PromptIn):
     generation_id: UUID
 
 
+class ExecutionProgressOut(Schema):
+    id: int
+    agent_name: str
+    node_name: str
+    status: str
+    variant_number: Literal[1, 2, 3]
+    started_at: datetime | None
+    finished_at: datetime | None
+    duration_ms: int | None
+    error_message: str
+    review_status: str | None
+
+
+class GenerationProgressOut(Schema):
+    run_id: int
+    status: str
+    variant_count: Literal[1, 2, 3]
+    percent: int
+    completed_steps: int
+    total_steps: int
+    started_at: datetime | None
+    finished_at: datetime | None
+    total_duration_ms: int | None
+    error_message: str
+    agent_executions: list[ExecutionProgressOut]
+
+
 class ActiveGenerationOut(Schema):
     scene_id: int
     generation_id: UUID
@@ -250,6 +277,7 @@ class ActiveGenerationOut(Schema):
     variant_count: Literal[1, 2, 3]
     current_agent: str | None = None
     variant_number: int | None = None
+    progress: GenerationProgressOut
 
 
 class PromptOut(Schema):
@@ -315,6 +343,12 @@ class SelectVariantIn(InputSchema):
 class RunDetailOut(RunOut):
     agent_executions: list[ExecutionOut]
     variants: list[VariantOut]
+    progress: GenerationProgressOut
+
+    @staticmethod
+    def resolve_progress(run):
+        from .progress import generation_progress
+        return generation_progress(run)
 
 
 class ActivityOut(Schema):

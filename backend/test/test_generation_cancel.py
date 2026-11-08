@@ -61,8 +61,11 @@ class GenerationCancellationTests(ApiTestCase):
 
         def model(*args, **kwargs):
             active = self.assert_status(self.send('get', '/generation/active'), 200).json()
+            progress = active.pop('progress')
             self.assertEqual(active, {**payload, 'scene_id': self.scene.pk, 'variant_count': 1,
                                       'current_agent': 'Scenarzysta', 'variant_number': 1})
+            self.assertEqual(progress['percent'], 50)
+            self.assertEqual([row['status'] for row in progress['agent_executions']], ['completed', 'completed', 'running'])
             other_account = Client()
             other_account.force_login(self.other_user)
             self.assertIsNone(self.send('get', '/generation/active', client=other_account).json())

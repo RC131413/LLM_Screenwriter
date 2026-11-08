@@ -25,6 +25,7 @@ from backend import ollama
 from backend.agents.services import generate_variants_for_run, scene_context
 
 from . import scheams as s
+from .progress import generation_progress
 from .screenplay import UNCLEAR_PROMPT, append_variant, obviously_unintelligible
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
@@ -515,12 +516,14 @@ def active_generation(request, response: HttpResponse):
     run = _active_generation(request.auth)
     if run is None:
         return None
-    agent = run.agent_executions.filter(status='running').last()
+    executions = list(run.agent_executions.all())
+    agent = next((execution for execution in reversed(executions) if execution.status == 'running'), None)
     return {
         'scene_id': run.request.scene_id, 'generation_id': run.run_metadata['generation_id'],
         'user_prompt': run.request.user_prompt, 'variant_count': run.run_metadata.get('variant_count', 1),
         'current_agent': agent.agent_name if agent else None,
         'variant_number': agent.input_payload.get('variant_number') if agent else None,
+        'progress': generation_progress(run, executions),
     }
 
 

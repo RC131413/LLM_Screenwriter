@@ -24,14 +24,18 @@ const props = () => {
 
 describe('assistant using stored backend data', () => {
   it('shows the saved draft and a warning when a critic revision exceeds the context window', async () => {
-    const variant = { ...variantFixture(), critic_feedback: 'Doprecyzuj reakcję Anny.',
+    const variant = { ...variantFixture(), critic_score: '8.00', critic_feedback: 'Doprecyzuj reakcję Anny.',
       critic_metadata: { review_status: 'context_limit_reached', needs_revision: true } };
     interceptHttp(call => call.path === '/scenes/20/variants'
       ? jsonResponse({ items: [variant], count: 1 }) : jsonResponse({ items: [], count: 0 }));
     render(<AssistantPanel {...props()} />);
 
-    expect(await screen.findByText(/Automatyczna poprawka przekracza limit kontekstu/)).toHaveTextContent('tekst nadal wymaga poprawek');
-    expect(screen.getByText('Doprecyzuj reakcję Anny.')).toBeInTheDocument();
+    const expand = await screen.findByRole('button', { name: 'Rozwiń ocenę wariantu 1' });
+    expect(screen.getByText('Ocena: 8.00')).toBeVisible();
+    expect(screen.getByText('Doprecyzuj reakcję Anny.')).not.toBeVisible();
+    await userEvent.setup().click(expand);
+    expect(screen.getByText(/Automatyczna poprawka przekracza limit kontekstu/)).toHaveTextContent('tekst nadal wymaga poprawek');
+    expect(screen.getByText('Doprecyzuj reakcję Anny.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Podgląd tekstu' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Zastosuj wybrany wariant' })).toBeEnabled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -203,14 +207,12 @@ describe('assistant using stored backend data', () => {
     expect(http.calls.some(call => call.method === 'POST')).toBe(false);
     expect(screen.getByLabelText('Kierunek sceny')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Generowanie...' })).toBeDisabled();
-    expect(screen.getByText('Generowanie... Oczekiwanie na odpowiedź Bielika.')).toHaveAttribute('role', 'status');
+    expect(screen.getByText('Generowanie... Przygotowywanie przebiegu.')).toHaveAttribute('role', 'status');
     await act(async () => { preparation.resolve(); });
     await waitFor(() => expect(http.calls.some(call => call.path === '/scenes/20/generate')).toBe(true));
     const readsBeforeRefresh = http.calls.filter(call => call.path.endsWith('/variants')).length;
-    const refresh = screen.getByRole('button', { name: 'Odśwież warianty i przebieg' });
-    expect(refresh).toBeDisabled();
-    expect(refresh).toHaveAttribute('title', 'Pobierz ponownie ostatnią serię wariantów i status.');
-    await user.click(refresh);
+    expect(screen.queryByRole('button', { name: 'Odśwież warianty i przebieg' })).not.toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Postęp generowania' })).toBeVisible();
     expect(http.calls.filter(call => call.path.endsWith('/variants'))).toHaveLength(readsBeforeRefresh);
     expect(http.calls.find(call => call.path === '/scenes/20/generate')?.init.signal?.aborted).toBe(false);
     await user.click(screen.getByRole('button', { name: 'Generowanie...' }));

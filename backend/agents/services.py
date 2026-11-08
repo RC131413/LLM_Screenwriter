@@ -143,11 +143,12 @@ def _start_agent(run, node, number):
     )
 
 
-def _finish_agent(execution, status, error_message=''):
+def _finish_agent(execution, status, error_message='', *, output_payload=None):
     finished = timezone.now()
     AgentExecution.objects.filter(pk=execution.pk, status='running').update(
         status=status, finished_at=finished, error_message=error_message,
         duration_ms=int((finished - execution.started_at).total_seconds() * 1000),
+        **({'output_payload': output_payload} if output_payload is not None else {}),
     )
 
 
@@ -172,7 +173,10 @@ def _run_workflow(graph, run, *, context, number, archived_context: ArchivedCont
                 _ensure_running(run)
                 for node, values in update.items():
                     state.update(values)
-                    _finish_agent(execution, 'completed')
+                    _finish_agent(execution, 'completed', output_payload={
+                        'review_status': state['review_status'],
+                        'revision_count': state['revision_count'],
+                    } if node == 'critic' else None)
                     next_node = NEXT_NODE.get(node)
                     if node == 'critic' and state['review_status'] == 'revision_requested':
                         next_node = 'scenarist'

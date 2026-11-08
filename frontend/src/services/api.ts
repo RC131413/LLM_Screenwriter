@@ -170,11 +170,37 @@ export interface GenerationParametersInput { temperature?: number; max_tokens?: 
 export interface CreatePromptInput { user_prompt: string; generation_parameters?: GenerationParametersInput | null }
 export interface GenerateSceneInput extends CreatePromptInput { generation_id?: string; variant_count: 1 | 2 | 3 }
 export interface CancelGenerationInput extends CreatePromptInput { generation_id: string }
+export interface ApiExecutionProgress {
+  id: ApiId;
+  agent_name: string;
+  node_name: string;
+  status: string;
+  variant_number: 1 | 2 | 3;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  error_message: string;
+  review_status: string | null;
+}
+export interface ApiGenerationProgress {
+  run_id: ApiId;
+  status: string;
+  variant_count: 1 | 2 | 3;
+  percent: number;
+  completed_steps: number;
+  total_steps: number;
+  started_at: string | null;
+  finished_at: string | null;
+  total_duration_ms: number | null;
+  error_message: string;
+  agent_executions: ApiExecutionProgress[];
+}
 export interface ApiActiveGeneration extends CancelGenerationInput {
   scene_id: ApiId;
   variant_count: 1 | 2 | 3;
   current_agent?: string | null;
   variant_number?: number | null;
+  progress?: ApiGenerationProgress;
 }
 export interface ApiPrompt {
   id: ApiId;
@@ -229,6 +255,7 @@ export interface SelectVariantInput { apply_to_scene?: boolean }
 export interface ApiRunDetail extends ApiGenerationRun {
   agent_executions: ApiAgentExecution[];
   variants: ApiSceneVariant[];
+  progress?: ApiGenerationProgress;
 }
 export interface ApiStatistics {
   projects: number;

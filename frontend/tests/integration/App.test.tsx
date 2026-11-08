@@ -95,7 +95,7 @@ describe('application → hooks → API client → HTTP', () => {
     await user.click(screen.getByRole('button', { name: 'Generuj scenę' }));
     expect(await screen.findByRole('radio', { name: 'Wariant Bielika' })).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Podgląd tekstu' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('Znalazłam list.');
+    expect(screen.getByRole('dialog', { name: 'Wariant: 1' })).toHaveTextContent('Znalazłam list.');
     await user.click(screen.getByRole('button', { name: 'Zamknij' }));
     expect(sourceText).toBe('Najnowszy tekst sceny.');
     const writes = http.calls.filter(call => call.path === '/scenes/20' || call.path === '/scenes/20/generate');

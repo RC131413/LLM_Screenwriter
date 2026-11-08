@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import type { CreateProjectInput, ProjectAction } from '../services/api';
 import { allPages, errorMessage, scenePayload, toProject, toScene } from '../services/workspaceData';
+import { SceneHistory } from '../services/sceneHistory';
+import type { SceneTextEdit } from '../services/sceneHistory';
 import type { Act, Character, Project, Scene } from '../types';
 
 export function useWorkspace(userId?: number) {
@@ -15,8 +17,7 @@ export function useWorkspace(userId?: number) {
   const [version, setVersion] = useState(0);
   const [historyVersion, setHistoryVersion] = useState(0);
   const pending = useRef(new Map<string, Scene>());
-  const past = useRef(new Map<string, Scene[]>());
-  const future = useRef(new Map<string, Scene[]>());
+  const history = useRef(new SceneHistory());
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const activeSaves = useRef(new Set<Promise<void>>());
@@ -25,6 +26,7 @@ export function useWorkspace(userId?: number) {
   const epoch = useRef(0);
 
   const replace = useCallback((next: Project[]) => { current.current = next; setProjects(next); }, []);
+  const breakHistoryGroup = useCallback(() => history.current.breakGroup(), []);
   const enqueue = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     const generation = epoch.current;
     jobs.current++; setSaveState('saving'); setError('');
@@ -48,7 +50,7 @@ export function useWorkspace(userId?: number) {
     const generation = epoch.current;
     const project = toProject(await api.projects.workspace(Number(projectId)));
     if (generation !== epoch.current) return project;
-    for (const scene of project.scenes) { past.current.delete(scene.id); future.current.delete(scene.id); }
+    for (const scene of project.scenes) history.current.clear(scene.id);
     project.scenes = project.scenes.map(scene => pending.current.get(scene.id) ?? scene);
     replace(current.current.some(item => item.id === projectId)
       ? current.current.map(item => item.id === projectId ? project : item) : [project, ...current.current]);
@@ -91,7 +93,7 @@ export function useWorkspace(userId?: number) {
 
   useEffect(() => {
     epoch.current++; clearTimeout(timer.current);
-    pending.current.clear(); past.current.clear(); future.current.clear();
+    pending.current.clear(); history.current.clear();
     replace([]); setError(''); setLoadError(''); setLoading(!!userId); setSaveState('saved');
     if (!userId) return;
     const controller = new AbortController();
@@ -120,13 +122,10 @@ export function useWorkspace(userId?: number) {
     return () => { window.removeEventListener('beforeunload', warn); clearTimeout(timer.current); };
   }, []);
 
-  const draftScene = useCallback((scene: Scene, history = true) => {
+  const draftScene = useCallback((scene: Scene, edit?: SceneTextEdit, recordHistory = true) => {
     const previous = current.current.flatMap(project => project.scenes).find(item => item.id === scene.id);
     if (!previous) return;
-    if (history) {
-      past.current.set(scene.id, [...(past.current.get(scene.id) ?? []), previous].slice(-50));
-      future.current.delete(scene.id);
-    }
+    if (recordHistory) history.current.record(previous, scene, edit);
     replace(current.current.map(project => ({ ...project, scenes: project.scenes.map(item => item.id === scene.id ? scene : item) })));
     pending.current.set(scene.id, scene); setSaveState('saving'); setHistoryVersion(value => value + 1);
     clearTimeout(timer.current);
@@ -148,18 +147,18 @@ export function useWorkspace(userId?: number) {
   return {
     projects, loading, loadError, error, saveState, mutating, historyVersion, flush, reloadProject,
     retry: () => { if (pending.current.size) void flush().catch(() => undefined); else setVersion(value => value + 1); },
-    updateScene: draftScene,
-    canUndo: (sceneId?: string) => !!sceneId && !!past.current.get(sceneId)?.length,
-    canRedo: (sceneId?: string) => !!sceneId && !!future.current.get(sceneId)?.length,
+    updateScene: draftScene, breakHistoryGroup,
+    canUndo: (sceneId?: string) => history.current.canUndo(sceneId),
+    canRedo: (sceneId?: string) => history.current.canRedo(sceneId),
     undo: (sceneId: string) => {
-      const previous = past.current.get(sceneId)?.pop();
       const scene = current.current.flatMap(project => project.scenes).find(item => item.id === sceneId);
-      if (previous && scene) { future.current.set(sceneId, [scene, ...(future.current.get(sceneId) ?? [])]); draftScene(previous, false); }
+      const previous = scene && history.current.undo(scene);
+      if (previous) draftScene(previous, undefined, false);
     },
     redo: (sceneId: string) => {
-      const next = future.current.get(sceneId)?.shift();
       const scene = current.current.flatMap(project => project.scenes).find(item => item.id === sceneId);
-      if (next && scene) { past.current.set(sceneId, [...(past.current.get(sceneId) ?? []), scene]); draftScene(next, false); }
+      const next = scene && history.current.redo(scene);
+      if (next) draftScene(next, undefined, false);
     },
     createProject: (details: CreateProjectInput) => mutate(async () => {
       const saved = await api.projects.create(details);
@@ -199,7 +198,7 @@ export function useWorkspace(userId?: number) {
       await reloadProject(projectId); return String(saved.id);
     }),
     removeScene: (projectId: string, sceneId: string) => mutate(async () => {
-      await api.scenes.delete(Number(sceneId)); past.current.delete(sceneId); future.current.delete(sceneId);
+      await api.scenes.delete(Number(sceneId)); history.current.clear(sceneId);
       await reloadProject(projectId);
     }),
     moveScene: (projectId: string, sceneId: string, actNumber: number) => mutate(async () => {
@@ -235,8 +234,7 @@ export function useWorkspace(userId?: number) {
       if (!previous) return false;
       const act = project.acts.find(item => item.id === String(saved.act_id));
       const updated = toScene(saved, act?.act_number ?? previous.act);
-      past.current.set(previous.id, [...(past.current.get(previous.id) ?? []), previous].slice(-50));
-      future.current.delete(previous.id);
+      history.current.record(previous, updated);
       replace(current.current.map(item => item.id === projectId
         ? { ...item, scenes: item.scenes.map(scene => scene.id === updated.id ? updated : scene) }
         : item));

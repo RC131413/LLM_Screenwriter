@@ -4,7 +4,14 @@
 !manage.py
 !backend/
 !backend/**
+!frontend/
+!frontend/**
 backend/**/__pycache__/
 backend/**/*.py[cod]
 backend/media/
 backend/staticfiles/
+frontend/node_modules/
+frontend/dist/
+frontend/tests/
+frontend/.env*
+frontend/*.tsbuildinfo

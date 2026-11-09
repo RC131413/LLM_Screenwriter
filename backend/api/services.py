@@ -2,7 +2,6 @@
 
 import json
 from datetime import timedelta
-from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
 from django.db.models import JSONField
@@ -12,9 +11,9 @@ from django.utils import timezone
 
 from .models import (
     Act, AgentExecution, Character, GenerationRun, Project, Scene,
-    SceneCharacter, SceneGenerationRequest, SceneVariant, UserProfile,
+    SceneCharacter, SceneGenerationRequest, SceneVariant,
 )
-from .scheams import PreferencesIn
+from backend.accounts.services import preferences_for
 from .security.input_validation import validate_data_tree
 
 
@@ -92,37 +91,6 @@ def save_validated(instance, changes=None):
     instance.full_clean()
     instance.save()
     return instance
-
-
-def profile_for(user):
-    defaults = PreferencesIn().model_dump()
-    profile, _ = UserProfile.objects.get_or_create(user=user, defaults=defaults)
-    return profile
-
-
-def preferences_for(profile):
-    """Effective account settings, including defaults for older JSON profiles."""
-    defaults = PreferencesIn().model_dump()
-    return {
-        'writing_style_preferences': {
-            **defaults['writing_style_preferences'], **profile.writing_style_preferences,
-        },
-        'llm_preferences': {
-            **defaults['llm_preferences'], **profile.llm_preferences,
-            'model_name': defaults['llm_preferences']['model_name'],
-            'max_tokens': defaults['llm_preferences']['max_tokens'],
-        },
-    }
-
-
-def validate_avatar(value):
-    if value:
-        try:
-            parsed = urlsplit(value)
-        except ValueError as error:
-            raise ValidationError({'avatar_url': 'Use a valid HTTP or HTTPS URL.'}) from error
-        if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username or parsed.password:
-            raise ValidationError({'avatar_url': 'Use an absolute HTTP or HTTPS URL.'})
 
 
 def prompt_snapshot(scene, profile):

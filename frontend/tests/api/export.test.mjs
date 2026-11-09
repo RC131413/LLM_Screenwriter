@@ -14,7 +14,7 @@ test('screenplay downloads preserve binary content, credentials, filename and fo
   assert.deepEqual(new Uint8Array(await download.blob.arrayBuffer()), bytes);
   assert.equal(download.filename, 'Zażółć.pdf');
   const request = transport.calls[0];
-  assert.equal(request.url, 'http://127.0.0.1:8000/api/projects/7/export?format=pdf');
+  assert.equal(request.url, `${window.location.origin}/api/projects/7/export?format=pdf`);
   assert.equal(request.credentials, 'include');
   assert.equal(request.method, 'GET');
   assert.equal(request.body, undefined);

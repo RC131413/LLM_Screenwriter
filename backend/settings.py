@@ -17,10 +17,12 @@ from ipaddress import ip_address
 from django.core.exceptions import ImproperlyConfigured
 from corsheaders.defaults import default_headers, default_methods
 from dotenv import load_dotenv
+from backend.frontend import static_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+FRONTEND_DIST = PROJECT_ROOT / 'frontend' / 'dist'
 load_dotenv(PROJECT_ROOT / '.env')
 
 
@@ -125,6 +127,7 @@ LLM_MAX_GENERATION_SECONDS = 900
 # Application definition
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -133,6 +136,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'backend.api.apps.ApiConfig',
+    'backend.accounts.apps.AccountsConfig',
 ]
 
 AUTH_USER_MODEL = 'api.User'
@@ -146,6 +150,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'backend.api.security.middleware.TrustedProxyMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -160,7 +165,7 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [FRONTEND_DIST],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -226,8 +231,18 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [('frontend', FRONTEND_DIST)] if FRONTEND_DIST.is_dir() else []
+# Serve the collected tree consistently on Windows and Linux. In particular,
+# prefixed Django finders expect OS-specific separators on Windows.
+WHITENOISE_USE_FINDERS = False
+WHITENOISE_ADD_HEADERS_FUNCTION = static_headers
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    # Vite already gives JS/CSS content hashes; preserve its generated URLs.
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 

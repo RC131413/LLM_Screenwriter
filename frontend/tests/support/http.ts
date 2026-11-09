@@ -25,7 +25,7 @@ export function interceptHttp(handle: (call: HttpCall) => Response | Promise<Res
   document.cookie = 'csrftoken=test-csrf; Path=/';
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
     const url = new URL(String(input));
-    if (url.origin !== 'http://127.0.0.1:8000' || !url.pathname.startsWith('/api/')) {
+    if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/')) {
       throw new Error(`Unexpected API URL: ${url}`);
     }
     const call: HttpCall = {

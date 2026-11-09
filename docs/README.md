@@ -7,8 +7,10 @@ Główny [README projektu](../README.md) pozostaje w katalogu głównym.
 - [Porównanie zwięzłych odpowiedzi agentów](agent-brevity-comparison.md) — pomiary czasu i ocena wyników.
 - [Diagram ERD](ERD/DB_diagram_ERD.png) — źródłowy schemat bazy danych.
 - [Courier Prime](courier-prime.md) — pochodzenie i zastosowanie czcionki w eksporcie PDF.
+- [Django + React + WhiteNoise](single-origin.md) — wspólny adres, Docker i wydzielona obsługa kont.
 
-Pliki wdrożeniowe pozostają w [deployment/](../deployment/), a licencje w katalogu
+Teoretyczne przykłady w [deployment/](../deployment/) nie są używane do uruchamiania aplikacji.
+Licencje pozostają w katalogu
 głównym oraz przy dostarczanych zasobach. Lokalne pliki robocze i surowe wyniki
 diagnostyczne w `.local-tools/` nie stanowią dokumentacji projektu.
 

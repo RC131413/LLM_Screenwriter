@@ -6,13 +6,10 @@ from typing import Literal
 from uuid import uuid4
 
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
-from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse, HttpResponse
-from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.text import slugify
@@ -20,15 +17,15 @@ from ninja import NinjaAPI, PatchDict, Query
 from ninja.errors import HttpError, ValidationError as NinjaValidationError
 from ninja.pagination import paginate
 from ninja.security import django_auth
-from ninja.utils import check_csrf
 
+from backend.accounts.services import preferences_for, profile_for
 from backend import ollama
 from backend.agents.services import generate_variants_for_run, scene_context
 
 from . import scheams as s
 from .progress import generation_progress
 from .statistics import account_statistics, activity_metadata
-from .security import LLMCapacityExceeded, RateLimitExceeded, SecurityStoreUnavailable, llm_capacity, lock_auth_identifiers, request_limit
+from .security import LLMCapacityExceeded, RateLimitExceeded, SecurityStoreUnavailable, llm_capacity, request_limit
 from .exporting import export_fdx, export_fountain, project_screenplay
 from .screenplay_pdf import export_pdf
 from .screenplay import UNCLEAR_PROMPT, append_variant, obviously_unintelligible
@@ -37,7 +34,7 @@ from .models import (
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
 )
 from .services import (
-    cancel_user_generations, get_owned, lock_project, owned, preferences_for, profile_for, prompt_snapshot, save_validated, validate_avatar,
+    get_owned, lock_project, owned, prompt_snapshot, save_validated,
 )
 
 
@@ -82,126 +79,6 @@ def validation_error(request, error):
 @api.exception_handler(IntegrityError)
 def integrity_error(request, error):
     return api.create_response(request, {'detail': 'Conflicting data. Refresh and try again.'}, status=409)
-
-
-@api.get('/auth/csrf', auth=None, response=s.CsrfOut, tags=['Authentication'])
-def csrf_token(request, response: HttpResponse):
-    response['Cache-Control'] = 'no-store'
-    return {'csrf_token': get_token(request)}
-
-
-@api.post('/auth/register', auth=None, response={201: s.UserOut}, tags=['Authentication'])
-@transaction.atomic
-def register(request, payload: s.RegisterIn):
-    if check_csrf(request):
-        raise HttpError(403, 'CSRF check failed.')
-    if payload.password != payload.password_confirm:
-        raise ValidationError({'password_confirm': 'Passwords do not match.'})
-    email = str(payload.email).lower()
-    username = User.normalize_username(payload.username)
-    lock_auth_identifiers(username, email)
-    if User.objects.filter(Q(email__iexact=email) | Q(username__iexact=username)
-                           | Q(email__iexact=username) | Q(username__iexact=email)).exists():
-        raise HttpError(409, 'Username or email is already in use.')
-    user = User(username=username, email=email)
-    validate_password(payload.password, user=user)
-    user.set_password(payload.password)
-    save_validated(user)
-    profile_for(user)
-    login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-    return 201, user
-
-
-@api.post('/auth/login', auth=None, response=s.UserOut, tags=['Authentication'])
-def sign_in(request, payload: s.LoginIn):
-    if check_csrf(request):
-        raise HttpError(403, 'CSRF check failed.')
-    candidates = list(User.objects.filter(
-        Q(username=payload.identifier) | Q(email__iexact=payload.identifier),
-    ).values_list('pk', 'username')[:2])
-    identity = f'user:{candidates[0][0]}' if len(candidates) == 1 else payload.identifier.strip().casefold()
-    request_limit(request, 'login-account', limit=10, seconds=300, identity=identity)
-    # Ambiguous username/email identifiers must not log into the wrong account.
-    username = candidates[0][1] if len(candidates) == 1 else ''
-    user = authenticate(request, username=username, password=payload.password)
-    if user is None:
-        raise HttpError(401, 'Invalid credentials.')
-    profile_for(user)
-    login(request, user)
-    return user
-
-
-@api.post('/auth/logout', response=s.MessageOut, tags=['Authentication'])
-def sign_out(request):
-    cancel_user_generations(request.auth)
-    logout(request)
-    return {'detail': 'Logged out.'}
-
-
-@api.get('/users/me', response=s.UserOut, tags=['Account'])
-def current_user(request):
-    profile_for(request.auth)
-    return request.auth
-
-
-@api.patch('/users/me', response=s.UserOut, tags=['Account'])
-@transaction.atomic
-def update_account(request, payload: PatchDict[s.AccountIn]):
-    user = User.objects.select_for_update().get(pk=request.auth.pk)
-    payload = dict(payload)
-    username = payload.get('username')
-    if username:
-        username = User.normalize_username(username.strip())
-        payload['username'] = username
-        lock_auth_identifiers(user.username, username)
-        if User.objects.filter(Q(username__iexact=username) | Q(email__iexact=username)).exclude(pk=user.pk).exists():
-            raise HttpError(409, 'Username is already in use.')
-    save_validated(user, payload)
-    profile_for(user)
-    return user
-
-
-@api.post('/users/me/password', response=s.MessageOut, tags=['Account'])
-@transaction.atomic
-def change_password(request, payload: s.PasswordIn):
-    user = User.objects.select_for_update().get(pk=request.auth.pk)
-    if not user.check_password(payload.old_password):
-        raise ValidationError({'old_password': 'Incorrect current password.'})
-    if payload.new_password != payload.new_password_confirm:
-        raise ValidationError({'new_password_confirm': 'Passwords do not match.'})
-    validate_password(payload.new_password, user=user)
-    user.set_password(payload.new_password)
-    cancel_user_generations(user)
-    save_validated(user)
-    update_session_auth_hash(request, user)
-    return {'detail': 'Password changed.'}
-
-
-@api.get('/users/me/profile', response=s.ProfileOut, tags=['Account'])
-def get_profile(request):
-    return profile_for(request.auth)
-
-
-@api.patch('/users/me/profile', response=s.ProfileOut, tags=['Account'])
-@transaction.atomic
-def update_profile(request, payload: PatchDict[s.ProfileIn]):
-    User.objects.select_for_update().get(pk=request.auth.pk)
-    if 'avatar_url' in payload:
-        validate_avatar(payload['avatar_url'])
-    return save_validated(profile_for(request.auth), payload)
-
-
-@api.get('/users/me/preferences', response=s.PreferencesIn, tags=['Preferences'])
-def get_preferences(request):
-    return preferences_for(profile_for(request.auth))
-
-
-@api.put('/users/me/preferences', response=s.PreferencesIn, tags=['Preferences'])
-@transaction.atomic
-def update_preferences(request, payload: s.PreferencesIn):
-    User.objects.select_for_update().get(pk=request.auth.pk)
-    save_validated(profile_for(request.auth), payload.model_dump())
-    return payload
 
 
 @api.get('/users/me/statistics', response=s.StatisticsOut, tags=['Statistics'])
@@ -486,7 +363,7 @@ def _create_prompt(request, scene_id, payload, *, model_name='Bielik 11B', with_
     profile = profile_for(request.auth)
     parameters = payload.generation_parameters
     if parameters is None:
-        preferences = get_preferences(request)
+        preferences = preferences_for(profile)
         parameters = s.GenerationParametersIn(**{
             key: preferences['llm_preferences'][key] for key in ('temperature', 'max_tokens')
         })
@@ -664,3 +541,7 @@ def select_variant(request, variant_id: s.PositiveId, payload: s.SelectVariantIn
         if changes is not None:
             variant.applied_scene = save_validated(scene, changes)
     return variant
+
+
+# Keep the existing /api/auth/* and /api/users/me* contracts in one API.
+api.add_router('', 'backend.accounts.api.router')

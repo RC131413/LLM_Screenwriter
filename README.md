@@ -5,6 +5,7 @@
 - `frontend/`: React, TypeScript and Vite application.
 - `backend/`: Django settings, URLs, ASGI and WSGI entry points.
 - `backend/ollama.py`: minimal HTTP client for the local Bielik model in Ollama.
+- `backend/accounts/`: authentication, account/profile endpoints, schemas and preferences.
 - `backend/api/`: Django application registered as `backend.api.apps.ApiConfig`;
   contains models corresponding to the database ERD.
 - `backend/api/security/`: middleware, input validation, rate limits and shared locks.
@@ -14,20 +15,38 @@
 - [docs/](docs/README.md): documentation, reports and the original database diagram
   in `docs/ERD/DB_diagram_ERD.png`.
 - `manage.py`, `venv/`, `requirements.txt`: kept in the repository root.
-- `compose.yaml`: PostgreSQL, its persistent volume, and the one-off `db_setup` service.
-- `Dockerfile`: Python environment for migrations and demo seeding, built from the repository root.
+- `compose.yaml`: the combined Django/React app, PostgreSQL and the one-off `db_setup` service.
+- `Dockerfile`: builds React with Node, collects static files and runs Django with Gunicorn/WhiteNoise.
 - `.env`: local credentials, already excluded by `.gitignore`.
 - `.env.example`: configuration template without real secrets.
 
-## Local Backend
+## Combined Application
+
+Django serves the built React application at **http://127.0.0.1:8000/** and its
+API at `/api/`. WhiteNoise serves Vite assets. No separate Vite server or Nginx is
+needed. See [the complete setup guide](docs/single-origin.md).
+
+For the complete Docker application, prepare `.env`, then run:
+
+```powershell
+docker compose up -d --build
+docker compose logs -f app
+```
+
+Stop a local `runserver` first if it already occupies port 8000, or select another
+`APP_PORT` in `.env`. Ollama remains on the host; Compose uses `host.docker.internal`.
+The files in `deployment/` are retained as theoretical documentation only.
+
+## Local Backend and Built Frontend
 
 Run commands from the repository root in PowerShell:
 
 ```powershell
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
-docker compose up -d --build
-docker compose wait db_setup
-docker compose logs db_setup
+docker compose up -d db
+docker compose run --rm db_setup
+npm --prefix frontend run build
+.\venv\Scripts\python.exe manage.py collectstatic --noinput
 .\venv\Scripts\python.exe manage.py check --database default
 .\venv\Scripts\python.exe manage.py runserver
 ```
@@ -93,8 +112,8 @@ then runs `migrate --noinput` followed by `seed_db`. A migration failure prevent
 seeding. The service exits after setup; PostgreSQL remains running.
 This follows [Compose's startup-order mechanism](https://docs.docker.com/compose/how-tos/startup-order/).
 Inside Compose, Django connects to `db:5432`; local Django uses `127.0.0.1:55432`.
-The image contains only backend sources, migrations, `manage.py` and dependencies;
-`.env`, `venv`, frontend files and local media are excluded from its build context.
+The runtime image contains backend sources, dependencies, the built frontend and
+collected static files. `.env`, `venv`, `node_modules` and local media are excluded.
 
 Seed data covers all 11 ERD models:
 
@@ -518,8 +537,8 @@ npm run build
 To run only one area: `npm test -- tests/hooks/useWorkspace.test.ts`, or from the
 repository root: `.\venv\Scripts\python.exe manage.py test backend.test.security.test_auth`.
 
-Rebuild the Docker setup image after installing these new dependencies:
-`docker compose build db_setup`.
+Rebuild the combined application and setup images after changing dependencies:
+`docker compose build app db_setup`.
 
 ## React, CORS and Cookies
 
@@ -538,6 +557,11 @@ origin to these lists if using another port, then restart Django.
 When these environment variables are absent, DEBUG mode supplies the local list;
 non-DEBUG mode defaults to no allowed origins. CSRF trust defaults to the CORS
 list, but can be configured separately. An empty variable explicitly clears its list.
+
+The default API address is now `/api/`, relative to the page origin. The combined
+Django application uses one origin; Vite development/preview proxies `/api/` to
+local Django. The following cross-origin guidance applies when explicitly
+overriding `VITE_API_BASE_URL` to a separate backend address.
 
 Use **the same hostname** on both sides, for example:
 

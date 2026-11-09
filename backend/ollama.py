@@ -3,11 +3,12 @@
 from collections.abc import Callable
 from http.client import HTTPConnection, HTTPException, HTTPSConnection
 import json
+import os
 from socket import SHUT_RDWR
 from threading import Event, Thread
 from urllib.parse import urlsplit
 
-OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
+OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://127.0.0.1:11434').rstrip('/')
 OLLAMA_MODEL = 'SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M'
 OLLAMA_TIMEOUT = 120
 OLLAMA_GPU_LAYERS = 99

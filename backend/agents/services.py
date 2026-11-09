@@ -18,8 +18,9 @@ from backend.api.models import AgentExecution, GenerationRun, Scene, SceneGenera
 from backend.api.screenplay import UNCLEAR_PROMPT, blocks_text, obviously_unintelligible
 from backend.api.services import (
     SCENE_VARIANT_APPROACHES, generation_is_cancelled, get_owned, lock_project, owned,
-    profile_for, prompt_snapshot, save_validated,
+    prompt_snapshot, save_validated,
 )
+from backend.accounts.services import profile_for
 from backend.ollama import OLLAMA_BASE_URL, OLLAMA_MODEL, OllamaCancelled, OllamaError
 
 from ._model import CancellableChatOllama

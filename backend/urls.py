@@ -18,8 +18,10 @@ from django.contrib import admin
 from django.urls import path
 
 from backend.api.api import api
+from backend.frontend import index
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', api.urls),
+    path('', index, name='frontend-home'),
 ]

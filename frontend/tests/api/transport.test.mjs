@@ -5,6 +5,10 @@ import { json, setupTransport } from '../support/transport';
 
 const transport = setupTransport();
 
+test('the default API URL follows the origin serving the frontend', () => {
+  assert.equal(API_BASE_URL, `${window.location.origin}/api/`);
+});
+
 test('GET always includes credentials and preserves supplied headers and query encoding', async () => {
   await apiRequest('projects', {
     headers: new Headers({ 'X-Request-ID': 'trace-1' }),

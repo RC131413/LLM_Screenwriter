@@ -5,6 +5,7 @@ from threading import get_ident
 from time import perf_counter
 
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.http import Http404
@@ -208,6 +209,8 @@ def generate_variants_for_run(run: GenerationRun, *, user: User, variant_count: 
         request_thread = get_ident()
 
         def is_cancelled():
+            if perf_counter() - started > settings.LLM_MAX_GENERATION_SECONDS:
+                raise OllamaError('Przekroczono maksymalny czas generowania. Spróbuj krótszego polecenia.', status_code=504)
             # The transport's watcher owns/closes its thread-local connection.
             # Between retries the model checks on the request thread instead;
             # never close that connection (it may be inside a transaction).

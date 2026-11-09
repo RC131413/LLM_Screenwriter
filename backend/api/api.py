@@ -5,6 +5,7 @@ from io import BytesIO
 from typing import Literal
 from uuid import uuid4
 
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -15,11 +16,10 @@ from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.text import slugify
-from ninja import NinjaAPI, PatchDict
-from ninja.errors import HttpError
+from ninja import NinjaAPI, PatchDict, Query
+from ninja.errors import HttpError, ValidationError as NinjaValidationError
 from ninja.pagination import paginate
 from ninja.security import django_auth
-from ninja.throttling import AnonRateThrottle
 from ninja.utils import check_csrf
 
 from backend import ollama
@@ -28,6 +28,7 @@ from backend.agents.services import generate_variants_for_run, scene_context
 from . import scheams as s
 from .progress import generation_progress
 from .statistics import account_statistics, activity_metadata
+from .security import LLMCapacityExceeded, RateLimitExceeded, SecurityStoreUnavailable, llm_capacity, lock_auth_identifiers, request_limit
 from .exporting import export_fdx, export_fountain, project_screenplay
 from .screenplay_pdf import export_pdf
 from .screenplay import UNCLEAR_PROMPT, append_variant, obviously_unintelligible
@@ -36,11 +37,40 @@ from .models import (
     SceneCharacter, SceneGenerationRequest, SceneVariant, User,
 )
 from .services import (
-    get_owned, lock_project, owned, preferences_for, profile_for, prompt_snapshot, save_validated, validate_avatar,
+    cancel_user_generations, get_owned, lock_project, owned, preferences_for, profile_for, prompt_snapshot, save_validated, validate_avatar,
 )
 
 
-api = NinjaAPI(title='AgentDraft API', version='1.0.0', auth=django_auth)
+api = NinjaAPI(title='AgentDraft API', version='1.0.0', auth=django_auth,
+               docs_url='/docs' if settings.API_DOCS_ENABLED else None,
+               openapi_url='/openapi.json' if settings.API_DOCS_ENABLED else None)
+
+
+@api.exception_handler(NinjaValidationError)
+def input_validation_error(request, error):
+    # Pydantic issues can contain raw passwords/prompts in 'input' and 'ctx'.
+    return api.create_response(request, {'detail': [
+        {key: issue[key] for key in ('loc', 'msg', 'type') if key in issue} for issue in error.errors
+    ]}, status=422)
+
+
+@api.exception_handler(RateLimitExceeded)
+def rate_limit_error(request, error):
+    response = api.create_response(request, {'detail': str(error)}, status=429)
+    response['Retry-After'] = str(error.wait)
+    return response
+
+
+@api.exception_handler(LLMCapacityExceeded)
+def llm_capacity_error(request, error):
+    response = api.create_response(request, {'detail': 'Model jest teraz zajęty. Spróbuj ponownie po zakończeniu generowania.'}, status=503)
+    response['Retry-After'] = '10'
+    return response
+
+
+@api.exception_handler(SecurityStoreUnavailable)
+def security_unavailable(request, error):
+    return api.create_response(request, {'detail': 'Usługa jest chwilowo niedostępna.'}, status=503)
 
 
 @api.exception_handler(ValidationError)
@@ -60,8 +90,7 @@ def csrf_token(request, response: HttpResponse):
     return {'csrf_token': get_token(request)}
 
 
-@api.post('/auth/register', auth=None, response={201: s.UserOut},
-          throttle=AnonRateThrottle('10/m'), tags=['Authentication'])
+@api.post('/auth/register', auth=None, response={201: s.UserOut}, tags=['Authentication'])
 @transaction.atomic
 def register(request, payload: s.RegisterIn):
     if check_csrf(request):
@@ -69,9 +98,12 @@ def register(request, payload: s.RegisterIn):
     if payload.password != payload.password_confirm:
         raise ValidationError({'password_confirm': 'Passwords do not match.'})
     email = str(payload.email).lower()
-    if User.objects.filter(Q(email__iexact=email) | Q(username__iexact=payload.username)).exists():
+    username = User.normalize_username(payload.username)
+    lock_auth_identifiers(username, email)
+    if User.objects.filter(Q(email__iexact=email) | Q(username__iexact=username)
+                           | Q(email__iexact=username) | Q(username__iexact=email)).exists():
         raise HttpError(409, 'Username or email is already in use.')
-    user = User(username=payload.username, email=email)
+    user = User(username=username, email=email)
     validate_password(payload.password, user=user)
     user.set_password(payload.password)
     save_validated(user)
@@ -80,16 +112,17 @@ def register(request, payload: s.RegisterIn):
     return 201, user
 
 
-@api.post('/auth/login', auth=None, response=s.UserOut,
-          throttle=AnonRateThrottle('10/m'), tags=['Authentication'])
+@api.post('/auth/login', auth=None, response=s.UserOut, tags=['Authentication'])
 def sign_in(request, payload: s.LoginIn):
     if check_csrf(request):
         raise HttpError(403, 'CSRF check failed.')
     candidates = list(User.objects.filter(
         Q(username=payload.identifier) | Q(email__iexact=payload.identifier),
-    ).values_list('username', flat=True)[:2])
+    ).values_list('pk', 'username')[:2])
+    identity = f'user:{candidates[0][0]}' if len(candidates) == 1 else payload.identifier.strip().casefold()
+    request_limit(request, 'login-account', limit=10, seconds=300, identity=identity)
     # Ambiguous username/email identifiers must not log into the wrong account.
-    username = candidates[0] if len(candidates) == 1 else ''
+    username = candidates[0][1] if len(candidates) == 1 else ''
     user = authenticate(request, username=username, password=payload.password)
     if user is None:
         raise HttpError(401, 'Invalid credentials.')
@@ -100,6 +133,7 @@ def sign_in(request, payload: s.LoginIn):
 
 @api.post('/auth/logout', response=s.MessageOut, tags=['Authentication'])
 def sign_out(request):
+    cancel_user_generations(request.auth)
     logout(request)
     return {'detail': 'Logged out.'}
 
@@ -114,9 +148,14 @@ def current_user(request):
 @transaction.atomic
 def update_account(request, payload: PatchDict[s.AccountIn]):
     user = User.objects.select_for_update().get(pk=request.auth.pk)
+    payload = dict(payload)
     username = payload.get('username')
-    if username and User.objects.filter(username__iexact=username).exclude(pk=user.pk).exists():
-        raise HttpError(409, 'Username is already in use.')
+    if username:
+        username = User.normalize_username(username.strip())
+        payload['username'] = username
+        lock_auth_identifiers(user.username, username)
+        if User.objects.filter(Q(username__iexact=username) | Q(email__iexact=username)).exclude(pk=user.pk).exists():
+            raise HttpError(409, 'Username is already in use.')
     save_validated(user, payload)
     profile_for(user)
     return user
@@ -132,6 +171,7 @@ def change_password(request, payload: s.PasswordIn):
         raise ValidationError({'new_password_confirm': 'Passwords do not match.'})
     validate_password(payload.new_password, user=user)
     user.set_password(payload.new_password)
+    cancel_user_generations(user)
     save_validated(user)
     update_session_auth_hash(request, user)
     return {'detail': 'Password changed.'}
@@ -165,14 +205,14 @@ def update_preferences(request, payload: s.PreferencesIn):
 
 
 @api.get('/users/me/statistics', response=s.StatisticsOut, tags=['Statistics'])
-def statistics(request, time_zone: str = 'Europe/Warsaw'):
+def statistics(request, time_zone: str = Query('Europe/Warsaw', max_length=64)):
     return account_statistics(request.auth, time_zone)
 
 
 @api.get('/projects', response=list[s.ProjectOut], tags=['Projects'])
 @paginate
 def list_projects(request, collection: Literal['all', 'recent', 'favorites', 'archive', 'trash'] = 'all',
-                  search: str = ''):
+                  search: str = Query('', max_length=255)):
     projects = owned(Project, request.auth)
     not_deleted = Q(metadata__deleted_at__isnull=True) | Q(metadata__deleted_at=None)
     not_archived = Q(metadata__archived_at__isnull=True) | Q(metadata__archived_at=None)
@@ -250,6 +290,7 @@ def workspace(request, project_id: s.PositiveId):
 @api.get('/projects/{project_id}/export', tags=['Projects'])
 def export_project(request, project_id: s.PositiveId, format: Literal['fountain', 'fdx', 'pdf']):
     project = get_owned(Project, request.auth, project_id)
+    request_limit(request, 'exports', limit=10, seconds=60)
     script = project_screenplay(project)
     render, content_type = {
         'fountain': (export_fountain, 'text/plain; charset=utf-8'),
@@ -467,14 +508,20 @@ def generate_scene(request, scene_id: s.PositiveId, payload: s.GenerateSceneIn, 
     if obviously_unintelligible(payload.user_prompt):
         get_owned(Scene, request.auth, scene_id)
         return 422, {'detail': UNCLEAR_PROMPT}
-    run = _prepare_generation(request, scene_id, payload)
-    if run.status == 'cancelled':
-        return 409, {'detail': 'Generowanie zostało anulowane.'}
-    try:
-        variants = generate_variants_for_run(run, user=request.auth, variant_count=payload.variant_count)
-    except ollama.OllamaError as error:
-        return error.status_code, {'detail': str(error)}
-    return 201, variants if payload.variant_count is not None else variants[0]
+    get_owned(Scene, request.auth, scene_id)
+    if _active_generation(request.auth) is not None:
+        raise HttpError(409, 'Inna scena jest już generowana. Poczekaj na zakończenie albo anuluj generowanie.')
+    request_limit(request, 'generation-minute', limit=3, seconds=60)
+    request_limit(request, 'generation-hour', limit=30, seconds=3600)
+    with llm_capacity():
+        run = _prepare_generation(request, scene_id, payload)
+        if run.status == 'cancelled':
+            return 409, {'detail': 'Generowanie zostało anulowane.'}
+        try:
+            variants = generate_variants_for_run(run, user=request.auth, variant_count=payload.variant_count)
+        except ollama.OllamaError as error:
+            return error.status_code, {'detail': str(error)}
+        return 201, variants if payload.variant_count is not None else variants[0]
 
 
 @transaction.atomic

@@ -1,4 +1,9 @@
-export const API_BASE_URL = 'http://127.0.0.1:8000/api/';
+const configuredApi = new URL(import.meta.env?.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api/',
+  typeof window === 'undefined' ? 'http://127.0.0.1:8000' : window.location.origin);
+if (!['http:', 'https:'].includes(configuredApi.protocol) || configuredApi.username || configuredApi.password || configuredApi.search || configuredApi.hash) {
+  throw new TypeError('Nieprawidłowy adres API.');
+}
+export const API_BASE_URL = configuredApi.href.replace(/\/?$/, '/');
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 export interface JsonObject { [key: string]: JsonValue }

@@ -26,7 +26,7 @@ function AutoTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
     observer.observe(element);
     return () => observer.disconnect();
   }, [props.value]);
-  return <textarea {...props} ref={ref} rows={1} />;
+  return <textarea {...props} maxLength={props.maxLength ?? 50000} ref={ref} rows={1} />;
 }
 
 interface Props {

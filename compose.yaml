@@ -41,7 +41,10 @@ services:
       - -ec
       - |
         python manage.py migrate --noinput
-        python manage.py seed_db
+        case "$${DJANGO_DEBUG}" in
+          True|true|1|yes) python manage.py seed_db ;;
+          *) echo "Production mode: demo seed skipped." ;;
+        esac
 
 volumes:
   postgres_data:

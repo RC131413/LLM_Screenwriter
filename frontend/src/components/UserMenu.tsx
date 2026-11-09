@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, LogOut, Settings, UserRound } from 'lucide-react';
 import type { UserProfile } from '../types';
+import { safeAvatarUrl } from '../services/validation';
 
 export function UserAvatar({ profile }: { profile: Pick<UserProfile, 'display_name' | 'avatar_url'> }) {
-  return <span className="user-avatar" aria-hidden="true">{profile.avatar_url ? <img src={profile.avatar_url} alt="" /> : <UserRound size={19} strokeWidth={1.5} />}</span>;
+  const avatar = safeAvatarUrl(profile.avatar_url);
+  return <span className="user-avatar" aria-hidden="true">{avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" /> : <UserRound size={19} strokeWidth={1.5} />}</span>;
 }
 
 export function UserMenu({ profile, onSettings, onLogout }: { profile: UserProfile; onSettings: () => void; onLogout: () => void }) {

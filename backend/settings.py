@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 import os
 from pathlib import Path
+from ipaddress import ip_address
 
 from django.core.exceptions import ImproperlyConfigured
 from corsheaders.defaults import default_headers, default_methods
@@ -63,6 +64,9 @@ SECRET_KEY = required_env('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in {'true', '1', 'yes'}
+API_DOCS_ENABLED = DEBUG
+if not DEBUG and (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5 or SECRET_KEY.startswith(('replace-', 'django-insecure-'))):
+    raise ImproperlyConfigured('Production requires a strong DJANGO_SECRET_KEY (at least 50 characters).')
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -84,6 +88,7 @@ CORS_URLS_REGEX = r'^/api(?:/|$)'
 CORS_ALLOW_HEADERS = list(default_headers)  # Includes content-type and x-csrftoken.
 CORS_ALLOW_METHODS = list(default_methods)
 CORS_EXPOSE_HEADERS = ['Content-Disposition']  # Download filename for the React export client.
+CORS_EXPOSE_HEADERS += ['Retry-After']
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
@@ -91,6 +96,30 @@ SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)
 CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', not DEBUG)
 SESSION_COOKIE_SAMESITE = cookie_same_site('SESSION_COOKIE_SAMESITE', SESSION_COOKIE_SECURE)
 CSRF_COOKIE_SAMESITE = cookie_same_site('CSRF_COOKIE_SAMESITE', CSRF_COOKIE_SECURE)
+if not DEBUG:
+    if not SESSION_COOKIE_SECURE or not CSRF_COOKIE_SECURE:
+        raise ImproperlyConfigured('Production requires Secure session and CSRF cookies.')
+    if '*' in ALLOWED_HOSTS:
+        raise ImproperlyConfigured('Production requires explicit DJANGO_ALLOWED_HOSTS.')
+    if any(not origin.startswith('https://') or '*' in origin for origin in CORS_ALLOWED_ORIGINS + CSRF_TRUSTED_ORIGINS):
+        raise ImproperlyConfigured('Production CORS and CSRF origins must be explicit HTTPS origins.')
+SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', not DEBUG)
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('DJANGO_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = env_bool('DJANGO_HSTS_PRELOAD', False)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+TRUSTED_PROXY_IPS = env_list('DJANGO_TRUSTED_PROXY_IPS')
+try:
+    TRUSTED_PROXY_IPS = [str(ip_address(value)) for value in TRUSTED_PROXY_IPS]
+except ValueError as error:
+    raise ImproperlyConfigured('DJANGO_TRUSTED_PROXY_IPS must contain exact IP addresses.') from error
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if TRUSTED_PROXY_IPS else None
+SESSION_COOKIE_AGE = 86400
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
+LLM_MAX_GENERATION_SECONDS = 900
 
 
 # Application definition
@@ -115,11 +144,13 @@ NINJA_NUM_PROXIES = 0
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'backend.api.security.middleware.TrustedProxyMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'backend.api.security.middleware.ApiSecurityMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -152,8 +183,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': required_env('POSTGRES_DB'),
-        'USER': required_env('POSTGRES_USER'),
-        'PASSWORD': required_env('POSTGRES_PASSWORD'),
+        'USER': os.environ.get('DJANGO_DB_USER') or required_env('POSTGRES_USER'),
+        'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD') or required_env('POSTGRES_PASSWORD'),
         'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1'),
         'PORT': os.environ.get('POSTGRES_PORT', '55432'),
         'OPTIONS': {'connect_timeout': 5},
@@ -206,6 +237,13 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend',
+        **({} if DEBUG else {'OPTIONS': {
+            'host': os.environ.get('DJANGO_SMTP_HOST', 'localhost'),
+            'port': int(os.environ.get('DJANGO_SMTP_PORT', '587')),
+            'username': os.environ.get('DJANGO_SMTP_USER', ''),
+            'password': os.environ.get('DJANGO_SMTP_PASSWORD', ''),
+            'use_tls': True, 'timeout': 10,
+        }}),
     },
 }

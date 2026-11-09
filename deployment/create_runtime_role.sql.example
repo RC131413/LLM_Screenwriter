@@ -1,0 +1,22 @@
+-- Run with psql as the migration/schema owner AFTER migrations, on the target DB.
+-- Set psql variables db_name and migration_role explicitly before running this file.
+-- This is an example; it was NOT executed against the development database.
+-- If agentdraft_app already exists, review it rather than rerunning CREATE ROLE.
+\set ON_ERROR_STOP on
+
+CREATE ROLE agentdraft_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT CONNECT ON DATABASE :"db_name" TO agentdraft_app;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO agentdraft_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO agentdraft_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO agentdraft_app;
+REVOKE INSERT, UPDATE, DELETE ON django_migrations FROM agentdraft_app;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_role" IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO agentdraft_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_role" IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO agentdraft_app;
+
+-- Interactive password prompt (no plaintext password in the command or this file).
+\password agentdraft_app
+ALTER ROLE agentdraft_app LOGIN;

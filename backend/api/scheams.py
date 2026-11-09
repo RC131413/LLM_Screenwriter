@@ -6,7 +6,8 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from ninja import Schema
-from pydantic import ConfigDict, EmailStr, Field
+from pydantic import ConfigDict, EmailStr, Field, field_validator, model_validator
+from .security.input_validation import validate_data_tree
 
 from backend.screenplay_schemas import (
     EditorBlock as EditorBlock,
@@ -20,13 +21,24 @@ from backend.screenplay_schemas import (
 )
 
 
-PositiveId = Annotated[int, Field(gt=0)]
+PositiveId = Annotated[int, Field(gt=0, le=9007199254740991)]
 JsonObject = dict[str, Any]
 ModelName = Literal['Bielik 11B (Lokalny)']
 
 
 class InputSchema(Schema):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+
+    @model_validator(mode='before')
+    @classmethod
+    def bound_input(cls, data):
+        validate_data_tree(data)
+        return data
+
+    @field_validator('username', 'identifier', 'title', 'name', 'dialogue_tone', mode='before', check_fields=False)
+    @classmethod
+    def trim_labels(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class MessageOut(Schema):
@@ -106,8 +118,8 @@ class UserOut(TimestampedOut):
 
 class ProjectIn(InputSchema):
     title: str = Field(min_length=1, max_length=255)
-    logline: str = ''
-    synopsis: str = ''
+    logline: str = Field(default='', max_length=5000)
+    synopsis: str = Field(default='', max_length=50000)
     genre: str = Field(default='', max_length=100)
     target_audience: str = Field(default='', max_length=255)
     screenplay_format: str = Field(default='fountain', min_length=1, max_length=32)
@@ -131,7 +143,7 @@ class ActIn(InputSchema):
     title: str = Field(default='', max_length=255)
     act_number: int = Field(ge=1)
     sort_order: int = Field(default=0, ge=0)
-    summary: str = ''
+    summary: str = Field(default='', max_length=20000)
     metadata: JsonObject = Field(default_factory=dict)
 
 
@@ -147,12 +159,12 @@ class ActOut(TimestampedOut):
 class CharacterIn(InputSchema):
     name: str = Field(min_length=1, max_length=150)
     role: str = Field(default='', max_length=255)
-    age: int | None = Field(default=None, ge=0)
-    psychological_profile: str = ''
-    appearance: str = ''
-    backstory: str = ''
-    goals: str = ''
-    fears: str = ''
+    age: int | None = Field(default=None, ge=0, le=150)
+    psychological_profile: str = Field(default='', max_length=20000)
+    appearance: str = Field(default='', max_length=20000)
+    backstory: str = Field(default='', max_length=20000)
+    goals: str = Field(default='', max_length=20000)
+    fears: str = Field(default='', max_length=20000)
     voice_profile: JsonObject = Field(default_factory=dict)
     memory_metadata: JsonObject = Field(default_factory=dict)
 
@@ -178,7 +190,7 @@ class SceneIn(InputSchema):
     title: str = Field(default='', max_length=255)
     location_heading: str = Field(default='', max_length=255)
     time_of_day: str = Field(default='', max_length=50)
-    content_text: str = ''
+    content_text: str = Field(default='', max_length=262144)
     ai_metadata: JsonObject = Field(default_factory=dict)
     editor_metadata: JsonObject = Field(default_factory=dict)
 
@@ -186,12 +198,12 @@ class SceneIn(InputSchema):
 class CastIn(InputSchema):
     character_id: PositiveId
     presence_type: str = Field(default='on_screen', min_length=1, max_length=50)
-    notes: str = ''
+    notes: str = Field(default='', max_length=10000)
 
 
 class CastUpdateIn(InputSchema):
     presence_type: str = Field(default='on_screen', min_length=1, max_length=50)
-    notes: str = ''
+    notes: str = Field(default='', max_length=10000)
 
 
 class CastOut(Schema):
@@ -226,7 +238,7 @@ class WorkspaceOut(Schema):
 
 class GenerationParametersIn(InputSchema):
     temperature: float = Field(default=0.7, ge=0, le=1, multiple_of=0.1)
-    max_tokens: int = Field(default=2048, ge=1, le=32768)
+    max_tokens: int = Field(default=2048, ge=1, le=8192)
 
 
 class PromptIn(InputSchema):

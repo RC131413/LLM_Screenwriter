@@ -15,6 +15,7 @@ from .models import (
     SceneCharacter, SceneGenerationRequest, SceneVariant, UserProfile,
 )
 from .scheams import PreferencesIn
+from .security.input_validation import validate_data_tree
 
 
 OWNER_PATHS = {
@@ -41,6 +42,13 @@ def owned(model, user):
     return model.objects.filter(**{OWNER_PATHS[model]: user})
 
 
+def cancel_user_generations(user):
+    now = timezone.now()
+    runs = list(owned(GenerationRun, user).filter(status='running').values_list('pk', flat=True))
+    GenerationRun.objects.filter(pk__in=runs, status='running').update(status='cancelled', finished_at=now, updated_at=now)
+    AgentExecution.objects.filter(run_id__in=runs, status='running').update(status='cancelled', finished_at=now)
+
+
 def generation_is_cancelled(run_id):
     """Called by the cancellation watcher; release its thread-local DB connection."""
     try:
@@ -65,6 +73,14 @@ def save_validated(instance, changes=None):
         setattr(instance, name, value)
     for field in instance._meta.fields:
         value = getattr(instance, field.attname)
+        if field.name in {'username', 'title', 'name'} and isinstance(value, str):
+            value = value.strip()
+            setattr(instance, field.attname, value)
+        if isinstance(value, (str, dict, list)):
+            try:
+                validate_data_tree(value, max_depth=32, max_nodes=100000)
+            except ValueError as error:
+                raise ValidationError({field.name: str(error)}) from error
         if (value is None and not field.null and not field.primary_key
                 and not getattr(field, 'auto_now', False) and not getattr(field, 'auto_now_add', False)):
             raise ValidationError({field.name: 'This field cannot be null.'})
@@ -105,7 +121,7 @@ def validate_avatar(value):
             parsed = urlsplit(value)
         except ValueError as error:
             raise ValidationError({'avatar_url': 'Use a valid HTTP or HTTPS URL.'}) from error
-        if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+        if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username or parsed.password:
             raise ValidationError({'avatar_url': 'Use an absolute HTTP or HTTPS URL.'})
 
 

@@ -3,6 +3,10 @@ import { api, ApiError } from '../services/api';
 import type { ApiUser, ChangePasswordInput, LoginInput, RegisterInput } from '../services/api';
 import { errorMessage } from '../services/workspaceData';
 
+function clearPromptDrafts() {
+  for (const key of Object.keys(sessionStorage)) if (key.startsWith('agentdraft.prompt.')) sessionStorage.removeItem(key);
+}
+
 export function useSession() {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -10,22 +14,25 @@ export function useSession() {
   const [version, setVersion] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const passwordChange = useRef<Promise<unknown>>(Promise.resolve());
+  const epoch = useRef(0);
   useEffect(() => {
     const controller = new AbortController();
+    const revision = ++epoch.current;
     setLoading(true); setError('');
     void api.auth.csrf({ signal: controller.signal }).then(() => api.account.get({ signal: controller.signal }))
-      .then(value => { if (!controller.signal.aborted) setUser(value); })
+      .then(value => { if (!controller.signal.aborted && revision === epoch.current) setUser(value); })
       .catch(failure => {
         if (controller.signal.aborted) return;
         setUser(null);
         if (!(failure instanceof ApiError && failure.status === 401)) setError(errorMessage(failure));
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    const expired = () => setUser(null);
+    const expired = () => { epoch.current++; clearPromptDrafts(); setUser(null); };
     window.addEventListener('api:unauthorized', expired);
     return () => { controller.abort(); window.removeEventListener('api:unauthorized', expired); };
   }, [version]);
   const refresh = useCallback(async () => {
-    const value = await api.account.get(); setUser(value); return value;
+    const revision = epoch.current;
+    const value = await api.account.get(); if (revision === epoch.current) setUser(value); return value;
   }, []);
   return {
     user, loading, loggingOut, error, refresh, retry: () => setVersion(value => value + 1),
@@ -37,8 +44,9 @@ export function useSession() {
       return result;
     },
     logout: async () => {
+      epoch.current++;
       setLoggingOut(true);
-      try { await passwordChange.current; await api.auth.logout(); setUser(null); window.location.hash = '#login'; }
+      try { await passwordChange.current; await api.auth.logout(); epoch.current++; clearPromptDrafts(); setUser(null); window.location.hash = '#login'; }
       finally { setLoggingOut(false); }
     },
   };

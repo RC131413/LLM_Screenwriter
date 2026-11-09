@@ -6,6 +6,26 @@ import { userFixture } from '../support/fixtures';
 import { deferred, interceptHttp, jsonResponse } from '../support/http';
 
 describe('session with the real API client', () => {
+  it('clears local prompt drafts and ignores a stale account read after logout', async () => {
+    const stale = deferred<Response>();
+    let reads = 0;
+    interceptHttp(call => {
+      if (call.path === '/users/me') return ++reads === 1 ? jsonResponse(userFixture()) : stale.promise;
+      if (call.path === '/auth/logout') return jsonResponse({ detail: 'Logged out.' });
+      return undefined;
+    });
+    const { result } = renderHook(() => useSession());
+    await waitFor(() => expect(result.current.user).not.toBeNull());
+    sessionStorage.setItem('agentdraft.prompt.1.20', 'Prywatny szkic');
+    sessionStorage.setItem('unrelated-key', 'retain');
+    let refresh!: Promise<unknown>;
+    act(() => { refresh = result.current.refresh(); });
+    await act(async () => { await result.current.logout(); });
+    await act(async () => { stale.resolve(jsonResponse(userFixture())); await refresh; });
+    expect(result.current.user).toBeNull();
+    expect(sessionStorage.getItem('agentdraft.prompt.1.20')).toBeNull();
+    expect(sessionStorage.getItem('unrelated-key')).toBe('retain');
+  });
   it('bootstraps CSRF and restores the cookie session without local storage', async () => {
     const account = deferred<Response>();
     const storage = vi.spyOn(Storage.prototype, 'getItem');

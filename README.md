@@ -7,10 +7,12 @@
 - `backend/ollama.py`: minimal HTTP client for the local Bielik model in Ollama.
 - `backend/api/`: Django application registered as `backend.api.apps.ApiConfig`;
   contains models corresponding to the database ERD.
-- `backend/test/`: tests grouped by authentication, account, projects, structure,
-  characters, generation, permissions, models, seeding, CORS and workspace flows.
+- `backend/api/security/`: middleware, input validation, rate limits and shared locks.
+- `backend/test/`: test packages for API, security, models, agents, screenplay and LLM;
+  shared fixtures and model transport helpers live in `support/`.
 - `frontend/tests/`: API transport, hooks, services, component and application integration tests.
-- `ERD/DB_diagram_ERD.png`: original database diagram.
+- [docs/](docs/README.md): documentation, reports and the original database diagram
+  in `docs/ERD/DB_diagram_ERD.png`.
 - `manage.py`, `venv/`, `requirements.txt`: kept in the repository root.
 - `compose.yaml`: PostgreSQL, its persistent volume, and the one-off `db_setup` service.
 - `Dockerfile`: Python environment for migrations and demo seeding, built from the repository root.
@@ -323,8 +325,9 @@ Implementation:
 - `backend/api/api.py`: routes, session authentication and HTTP responses.
 - `backend/api/scheams.py`: typed request/response contracts (requested filename).
 - `backend/api/services.py`: ownership checks, validated saves and context snapshots.
-- `backend/test/test_*.py`: HTTP, CSRF, authorization, model and workflow tests,
-  with shared API fixtures in `_api_base.py`.
+- `backend/api/security/`: shared security guards, middleware and input bounds.
+- `backend/test/`: HTTP, CSRF, authorization, model and workflow tests in themed
+  subpackages, with shared API fixtures in `support/api_base.py`.
 - `backend/urls.py`: mounts the API at `/api/`.
 
 Paths below are relative to `/api` and do not have trailing slashes:
@@ -513,7 +516,7 @@ npm run build
 - `tests/support/`: isolated HTTP interception, test DTOs and deferred responses.
 
 To run only one area: `npm test -- tests/hooks/useWorkspace.test.ts`, or from the
-repository root: `.\venv\Scripts\python.exe manage.py test backend.test.test_auth`.
+repository root: `.\venv\Scripts\python.exe manage.py test backend.test.security.test_auth`.
 
 Rebuild the Docker setup image after installing these new dependencies:
 `docker compose build db_setup`.
@@ -590,7 +593,7 @@ SameSite values and SameSite=None without Secure fail at startup. Browsers may
 still block third-party cookies independently of CORS, so a same-site deployment
 or reverse proxy is more reliable. See [Django cookie settings](https://docs.djangoproject.com/en/6.1/ref/settings/#session-cookie-samesite).
 
-CORS integration and credential tests are in `backend/test/test_cors.py` and run
+CORS integration and credential tests are in `backend/test/security/test_cors.py` and run
 with the rest of the backend test suite. No migrations are required.
 
 ## Project exports
@@ -616,5 +619,5 @@ cues and parentheticals stay with the following text when possible.
 Courier Prime's redistribution license is in `backend/assets/fonts/courier-prime/OFL.txt`.
 Font assets are already included by the existing Dockerfile's `COPY backend/`.
 Install `requirements-dev.txt` to run PDF inspection tests (adds pypdf); the runtime
-needs only `requirements.txt`. Export coverage is in `backend/test/test_project_exports.py`
+needs only `requirements.txt`. Export coverage is in `backend/test/api/test_project_exports.py`
 and `frontend/tests/integration/ProjectExport.test.tsx`.

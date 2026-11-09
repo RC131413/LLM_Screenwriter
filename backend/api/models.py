@@ -13,6 +13,13 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class RequestRateLimit(models.Model):
+    """Shared fixed-window counters; keys are hashes, never raw IPs or logins."""
+    key = models.CharField(max_length=64, primary_key=True)
+    requests = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(db_index=True)
+
+
 class User(AbstractUser):
     email = models.EmailField(unique=True)
     # Keep Django's password API while matching the ERD's database column.

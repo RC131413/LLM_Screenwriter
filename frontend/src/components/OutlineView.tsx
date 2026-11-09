@@ -79,7 +79,7 @@ export function OutlineView({ project, onSelect, onAdd, onAddAct, onSaveAct, onR
     {editingAct && <Modal title={`Edytuj akt ${formatAct(editingAct.act_number)}`} onClose={() => { if (!pending) setEditingAct(undefined); }}>
       <form onSubmit={event => { event.preventDefault(); void run(() => onSaveAct({ ...editingAct, title: editingAct.title.trim() }), () => setEditingAct(undefined)); }}>
         <div className="modal-body"><label className="field-label" htmlFor="act-title">Tytuł aktu</label><input id="act-title" className="field-input" maxLength={255} value={editingAct.title} onChange={event => setEditingAct({ ...editingAct, title: event.target.value })} />
-          <label className="field-label spaced" htmlFor="act-summary">Streszczenie wydarzeń w akcie</label><textarea id="act-summary" className="field-textarea" rows={7} value={editingAct.summary} onChange={event => setEditingAct({ ...editingAct, summary: event.target.value })} />
+          <label className="field-label spaced" htmlFor="act-summary">Streszczenie wydarzeń w akcie</label><textarea id="act-summary" className="field-textarea" rows={7} maxLength={20000} value={editingAct.summary} onChange={event => setEditingAct({ ...editingAct, summary: event.target.value })} />
           {error && <p className="form-error" role="alert">{error}</p>}</div>
         <div className="modal-actions"><button type="button" className="button" disabled={pending} onClick={() => setEditingAct(undefined)}>Anuluj</button><button type="submit" className="button primary" disabled={pending}>{pending ? 'Zapisywanie…' : 'Zapisz akt'}</button></div>
       </form></Modal>}

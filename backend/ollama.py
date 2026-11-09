@@ -14,6 +14,8 @@ OLLAMA_GPU_LAYERS = 99
 OLLAMA_BATCH_SIZE = 128
 OLLAMA_AGENT_BATCH_SIZE = 64
 OLLAMA_CONTEXT_SIZE = 4096
+OLLAMA_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+OLLAMA_MAX_LINE_BYTES = 256 * 1024
 
 
 class OllamaError(RuntimeError):
@@ -70,6 +72,8 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
 
     def check_cancelled():
         if watch_errors:
+            if isinstance(watch_errors[0], OllamaError):
+                raise watch_errors[0]
             raise OllamaError('Nie można sprawdzić statusu generowania.', status_code=503) from watch_errors[0]
         if cancelled.is_set():
             raise OllamaCancelled()
@@ -111,7 +115,14 @@ def generate(prompt: str, *, base_url: str = OLLAMA_BASE_URL, timeout: float = O
                     raise OllamaError(f'Model {OLLAMA_MODEL} jest niedostępny. Pobierz go: ollama pull {OLLAMA_MODEL}')
                 raise OllamaError(f'Ollama zwróciła błąd HTTP {response.status}. Sprawdź logi Ollamy.')
             parts = []
-            for line in response:
+            received = 0
+            while True:
+                line = response.readline(OLLAMA_MAX_LINE_BYTES + 1)
+                if not line:
+                    break
+                received += len(line)
+                if len(line) > OLLAMA_MAX_LINE_BYTES or received > OLLAMA_MAX_RESPONSE_BYTES:
+                    raise OllamaError('Odpowiedź modelu przekroczyła dopuszczalny rozmiar.')
                 check_cancelled()
                 if not line.strip():
                     continue

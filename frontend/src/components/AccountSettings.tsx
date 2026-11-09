@@ -5,6 +5,7 @@ import type { ChangePasswordInput } from '../services/api';
 import { errorMessage } from '../services/workspaceData';
 import { UserAvatar } from './UserMenu';
 import { PasswordField } from './PasswordField';
+import { safeAvatarUrl } from '../services/validation';
 
 interface Props {
   profile: UserProfile;
@@ -31,6 +32,7 @@ export function AccountSettings({ profile, onSave, onLogout, onPasswordChange }:
     <section className="settings-section"><div className="settings-section-heading"><h2>Profil</h2></div>
       <form onSubmit={async event => {
         event.preventDefault(); if (pending) return;
+        if (avatar.trim() && !safeAvatarUrl(avatar.trim())) { setError('Podaj pełny adres HTTP lub HTTPS bez loginu i hasła w adresie.'); return; }
         setPending(true); setError(''); setMessage('');
         try { await onSave({ username: username.trim(), display_name: name.trim(), avatar_url: avatar.trim() || null }); setMessage('Zmiany zapisane.'); }
         catch (failure) { setError(errorMessage(failure)); }

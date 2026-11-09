@@ -36,13 +36,13 @@ export function ProjectDialog({ project, onSave, onClose }: Props) {
         <label className="field-label" htmlFor="project-title">Tytuł</label>
         <input id="project-title" name="title" className="field-input" required maxLength={120} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
         <label className="field-label spaced" htmlFor="project-genre">Gatunek</label>
-        <input id="project-genre" name="genre" className="field-input" value={draft.genre} onChange={event => setDraft({ ...draft, genre: event.target.value })} />
+        <input id="project-genre" name="genre" className="field-input" maxLength={100} value={draft.genre} onChange={event => setDraft({ ...draft, genre: event.target.value })} />
         <label className="field-label spaced" htmlFor="project-target-audience">Grupa docelowa</label>
         <input id="project-target-audience" name="target_audience" className="field-input" maxLength={255} value={draft.target_audience} onChange={event => setDraft({ ...draft, target_audience: event.target.value })} />
         <label className="field-label spaced" htmlFor="project-logline">Logline</label>
-        <textarea id="project-logline" name="logline" className="field-textarea" rows={3} value={draft.logline} onChange={event => setDraft({ ...draft, logline: event.target.value })} />
+        <textarea id="project-logline" name="logline" className="field-textarea" rows={3} maxLength={5000} value={draft.logline} onChange={event => setDraft({ ...draft, logline: event.target.value })} />
         <label className="field-label spaced" htmlFor="project-synopsis">Streszczenie</label>
-        <textarea id="project-synopsis" name="synopsis" className="field-textarea project-synopsis" rows={8} value={draft.synopsis} onChange={event => setDraft({ ...draft, synopsis: event.target.value })} />
+        <textarea id="project-synopsis" name="synopsis" className="field-textarea project-synopsis" rows={8} maxLength={50000} value={draft.synopsis} onChange={event => setDraft({ ...draft, synopsis: event.target.value })} />
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
       <div className="modal-actions">

@@ -1,13 +1,15 @@
 # Dokumentacja AgentDraft
 
-Dokumenty i raporty zachowujemy tutaj jako materiały do końcowego README.
-Główny [README projektu](../README.md) pozostaje w katalogu głównym.
+Główny [README projektu](../README.md) opisuje aplikację, uruchamianie, architekturę,
+API i wyniki weryfikacji. Poniższe dokumenty zachowują szczegółowe dane oraz
+warunki wcześniejszych prób; ich datowane wyniki odnoszą się do opisanego etapu.
 
 - [Audyt bezpieczeństwa](SECURITY_AUDIT.md) — zabezpieczenia, wyniki kontroli i wymagania wdrożenia.
 - [Porównanie zwięzłych odpowiedzi agentów](agent-brevity-comparison.md) — pomiary czasu i ocena wyników.
 - [Diagram ERD](ERD/DB_diagram_ERD.png) — źródłowy schemat bazy danych.
 - [Courier Prime](courier-prime.md) — pochodzenie i zastosowanie czcionki w eksporcie PDF.
 - [Django + React + WhiteNoise](single-origin.md) — wspólny adres, Docker i wydzielona obsługa kont.
+- [Zrzuty aplikacji](screenshots/) — dziewięć oryginalnych obrazów wykorzystanych w galerii README.
 
 Teoretyczne przykłady w [deployment/](../deployment/) nie są używane do uruchamiania aplikacji.
 Licencje pozostają w katalogu

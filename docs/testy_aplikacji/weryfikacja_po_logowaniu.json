@@ -1,0 +1,49 @@
+{
+  "checked_at": "2026-11-10T13:26:13.224892+00:00",
+  "method": "Wylogowanie i ponowne logowanie w przeglądarce, porównanie danych pobranych z API.",
+  "checks": [
+    {
+      "scene_id": 18,
+      "scene_unchanged": true,
+      "history_and_variants_unchanged": true,
+      "hash_before": "e7b84f45eb004fc97d6c80a8ddac495a0d25d1cd52a62254e5dee63960fcdd07",
+      "hash_after": "e7b84f45eb004fc97d6c80a8ddac495a0d25d1cd52a62254e5dee63960fcdd07"
+    },
+    {
+      "scene_id": 19,
+      "scene_unchanged": true,
+      "history_and_variants_unchanged": true,
+      "hash_before": "553719459d06e22eca5e130f330ce5a3c646c52020b30816e58bd0538ac15b59",
+      "hash_after": "553719459d06e22eca5e130f330ce5a3c646c52020b30816e58bd0538ac15b59"
+    },
+    {
+      "scene_id": 23,
+      "scene_unchanged": true,
+      "history_and_variants_unchanged": true,
+      "hash_before": "777c24a3869d9f25d5b6d379d69a06e3276916bcc20707db1beb8284f7c83456",
+      "hash_after": "777c24a3869d9f25d5b6d379d69a06e3276916bcc20707db1beb8284f7c83456"
+    },
+    {
+      "scene_id": 20,
+      "scene_unchanged": true,
+      "history_and_variants_unchanged": true,
+      "hash_before": "21450fd316334c16b44429014f5d7bcfa0190065c8f0bf45101c1e01534ecf90",
+      "hash_after": "21450fd316334c16b44429014f5d7bcfa0190065c8f0bf45101c1e01534ecf90"
+    },
+    {
+      "scene_id": 21,
+      "scene_unchanged": true,
+      "history_and_variants_unchanged": true,
+      "hash_before": "ab0e20d14d65392f4bfb54a2f0df0f1bc74b7039f87765a17918faf5b93c9c11",
+      "hash_after": "ab0e20d14d65392f4bfb54a2f0df0f1bc74b7039f87765a17918faf5b93c9c11"
+    },
+    {
+      "scene_id": 22,
+      "scene_unchanged": true,
+      "history_and_variants_unchanged": true,
+      "hash_before": "4d35430943cf619298cddc9965d483197cc83c1aca936ac52dfeadcf1165151f",
+      "hash_after": "4d35430943cf619298cddc9965d483197cc83c1aca936ac52dfeadcf1165151f"
+    }
+  ],
+  "all_passed": true
+}

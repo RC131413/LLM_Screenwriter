@@ -1,0 +1,300 @@
+<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AgentDraft — testy aplikacji</title>
+<style>body{max-width:1080px;margin:36px auto;padding:0 20px;font:16px/1.6 system-ui,sans-serif;color:#29362f;background:#fafbf9}h1{font-size:30px}h2{font-size:21px;margin-top:30px}a{color:#315c46}table{width:100%;border-collapse:collapse;background:white}th,td{text-align:left;padding:9px 12px;border-bottom:1px solid #d8dfd9}figure{margin:0;background:white;border:1px solid #d8dfd9}figure img{display:block;width:100%}figcaption{padding:9px 12px;color:#59695f;font-size:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}details{padding:12px 0;border-bottom:1px solid #d8dfd9}summary{cursor:pointer}pre{font:14px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:16px}small{color:#66766c}@media(max-width:700px){.grid{grid-template-columns:1fr}}</style>
+<h1>AgentDraft — testy aplikacji</h1><p><small>10.11.2026 · Bielik 11B · temperatura 0.7</small></p><p>3 zakończone przebiegi, 4 zapisane warianty oraz próby anulowania i walidacji.</p>
+<p><a href="RAPORT.md">Raport</a> · <a href="wyniki.json">Wyniki</a> · <a href="historia_z_api.json">Dane z API</a> · <a href="weryfikacja_po_logowaniu.json">Trwałość danych</a></p>
+<h2>Wyniki prób</h2><table><tr><th>Próba</th><th>Wynik</th><th>Czas</th></tr>
+<tr><td>Pusta scena, 1 wariant</td><td>OK</td><td>79,4 s</td></tr>
+<tr><td>Kontynuacja sceny, 1 wariant</td><td>OK</td><td>116,7 s</td></tr>
+<tr><td>Generowanie 2 wariantów</td><td>OK</td><td>165,9 s</td></tr>
+<tr><td>Anulowanie</td><td>Bez zapisanego wariantu</td><td>—</td></tr>
+<tr><td>Polecenie „adada”</td><td>Odrzucone, HTTP 422</td><td>—</td></tr>
+<tr><td>Zamiana wariantu i cofanie</td><td>Bez duplikowania tekstu</td><td>—</td></tr>
+<tr><td>Powrót / odświeżenie podczas generowania</td><td>Przywrócone polecenie i postęp</td><td>—</td></tr>
+<tr><td>Ponowne logowanie</td><td>Sceny, warianty i historia zachowane</td><td>—</td></tr>
+</table><p>Teksty nadal wymagają redakcji: pojawiają się powtórzenia, zbędne didaskalia i błędy ciągłości, mimo ocen Krytyka 8–9/10.</p><h2>Zrzuty aplikacji</h2><div class="grid">
+<figure><a href="screeny/01_projekty.jpg"><img loading="lazy" src="screeny/01_projekty.jpg" alt="Lista projektów"></a><figcaption>Lista projektów</figcaption></figure>
+<figure><a href="screeny/02_struktura.jpg"><img loading="lazy" src="screeny/02_struktura.jpg" alt="Akty i sceny"></a><figcaption>Akty i sceny</figcaption></figure>
+<figure><a href="screeny/03_postacie.jpg"><img loading="lazy" src="screeny/03_postacie.jpg" alt="Profile postaci"></a><figcaption>Profile postaci</figcaption></figure>
+<figure><a href="screeny/04_kontekst.jpg"><img loading="lazy" src="screeny/04_kontekst.jpg" alt="Cel sceny i obsada"></a><figcaption>Cel sceny i obsada</figcaption></figure>
+<figure><a href="screeny/05_jeden_wariant.jpg"><img loading="lazy" src="screeny/05_jeden_wariant.jpg" alt="Zapisany wariant i ocena"></a><figcaption>Zapisany wariant i ocena</figcaption></figure>
+<figure><a href="screeny/06_podglad_wariantu.jpg"><img loading="lazy" src="screeny/06_podglad_wariantu.jpg" alt="Tekst pojedynczego wariantu"></a><figcaption>Tekst pojedynczego wariantu</figcaption></figure>
+<figure><a href="screeny/07_dwa_warianty.jpg"><img loading="lazy" src="screeny/07_dwa_warianty.jpg" alt="Dwa warianty i wybór wyniku"></a><figcaption>Dwa warianty i wybór wyniku</figcaption></figure>
+<figure><a href="screeny/08_drugi_wariant.jpg"><img loading="lazy" src="screeny/08_drugi_wariant.jpg" alt="Podgląd drugiego wariantu"></a><figcaption>Podgląd drugiego wariantu</figcaption></figure>
+<figure><a href="screeny/09_anulowanie.jpg"><img loading="lazy" src="screeny/09_anulowanie.jpg" alt="Anulowany przebieg"></a><figcaption>Anulowany przebieg</figcaption></figure>
+<figure><a href="screeny/10_walidacja.jpg"><img loading="lazy" src="screeny/10_walidacja.jpg" alt="Odrzucone niezrozumiałe polecenie"></a><figcaption>Odrzucone niezrozumiałe polecenie</figcaption></figure>
+<figure><a href="screeny/11_historia.jpg"><img loading="lazy" src="screeny/11_historia.jpg" alt="Historia promptów po logowaniu"></a><figcaption>Historia promptów po logowaniu</figcaption></figure>
+<figure><a href="screeny/12_statystyki.jpg"><img loading="lazy" src="screeny/12_statystyki.jpg" alt="Statystyki aplikacji"></a><figcaption>Statystyki aplikacji</figcaption></figure>
+</div><h2>Polecenia i odpowiedzi</h2>
+<details><summary>Scena 18 · 1 wariant(y) · completed</summary><p>Rozpocznij krótką scenę w nocnej dyżurce stacji. ANNA znajduje w księdze dyżurów wpis, którego nie sporządziła. OLEK próbuje ją zbyć żartem, ale widok wpisu go niepokoi. Zakończ na tym konkretnym odkryciu, bez rozwiązania zagadki. Tylko ANNA i OLEK; do 6 krótkich elementów akcji i wypowiedzi. Wymyśl pasujący nagłówek.</p>
+<h3>Wariant 1 · ocena 9.00/10</h3><pre>Anna przegląda księgę dyżurów w świetle lampki na biurku. Widzi wpis, którego nie rozpoznaje.
+
+ANNA
+
+(Pokazuje Olekowi nieznany wpis.)
+
+Olek, widziałeś ten wpis?
+
+Olek podchodzi do biurka i zerka na księgę.
+
+OLEK
+
+A co? To chyba nic takiego.
+
+Anna patrzy na Oleka wyczekująco, a on wzrusza ramionami.
+
+ANNA
+
+To nie ty go sporządziłeś?
+
+OLEK
+
+(Zaprzecza i sugeruje pomyłkę.)
+
+Nie, no co ty! Może to jakaś pomyłka albo... sam nie wiem.
+
+Anna zaznacza datę i godzinę wpisu na kartce.
+
+ANNA
+
+Sprawdźmy nagranie z monitoringu. Może tam znajdziemy odpowiedź.
+
+Olek kiwa głową i podchodzi do panelu kontrolnego.</pre>
+</details>
+<details><summary>Scena 19 · 1 wariant(y) · completed</summary><p>Dopisz krótki dalszy ciąg tej sceny, bez powtarzania początku. OLEK zauważa na obudowie dyktafonu świeże zadrapanie i proponuje zabezpieczenie urządzenia. ANNA podejmuje konkretną decyzję. Jedyny klucz nadal jest w kieszeni ANNY, a OLEK nie zna kodu sejfu. Nie zmieniaj miejsca ani pory dnia i nie rozwiązuj zagadki. Tylko ANNA i OLEK.</p>
+<h3>Wariant 1 · ocena 8.00/10</h3><pre>Olek podchodzi do biurka i przygląda się obudowie dyktafonu.
+
+OLEK
+
+(Zauważa świeże zadrapanie.)
+
+Hej, Anka, widziałaś to?
+
+Anna podchodzi do Oleka i spogląda na obudowę dyktafonu.
+
+ANNA
+
+(Zaniepokojona zadrapaniem.)
+
+Co to jest?
+
+OLEK
+
+(Proponuje zabezpieczenie urządzenia.)
+
+To wygląda na świeże zadrapanie. Może ktoś próbował coś zrobić z dyktafonem?
+
+Anna kiwa głową i myśli przez chwilę.
+
+ANNA
+
+(Podejmuje decyzję o zabezpieczeniu urządzenia.)
+
+Masz rację. Musimy lepiej zabezpieczyć dyktafon.
+
+Anna otwiera metalową kasetkę i wyjmuje jedyny klucz.
+
+Olek przygląda się, jak Anna wkłada klucz do kieszeni kurtki.
+
+Anna zamyka kasetkę i odkłada ją na biurko.
+
+ANNA
+
+Tylko ja mam klucz, Olek. A kod do sejfu znam tylko ja.
+
+Olek kiwa głową, rozumiejąc sytuację.
+
+OLEK
+
+Myślisz, że ktoś próbował zatrzeć ślady?
+
+ANNA
+
+To możliwe. Lepiej, żeby nikt go nie znalazł.
+
+Anna wkłada dyktafon do kieszeni kurtki.
+
+OLEK
+
+Mogę trzymać kasetkę z nagraniem w sejfie.
+
+ANNA
+
+Nie, Olek. Tylko ja znam kod. Muszę trzymać kasetkę przy sobie.
+
+Olek wzdycha, akceptując decyzję Anny.
+
+ANNA
+
+Wiem, że to ryzykowne, ale musimy być ostrożni. Będę trzymać kasetkę przy sobie.
+
+OLEK
+
+Ufasz mi z sejfem, Anka?
+
+ANNA
+
+Nie mamy wyboru, Olek. Ale musimy być ostrożni.
+
+OLEK
+
+(Sugeruje poinformowanie kogoś o sytuacji.)
+
+Może powinniśmy poinformować kogoś o tym wszystkim?
+
+ANNA
+
+Nie, Olek. Musimy sami rozwiązać ten problem.</pre>
+</details>
+<details><summary>Scena 20 · 2 wariant(y) · completed</summary><p>Dopisz krótkie zakończenie tej sceny: ANNA i OLEK muszą zdecydować, jak zabezpieczyć dyktafon. Dioda nagle gaśnie; ich decyzja ma wynikać z tego widocznego szczegółu. Zachowaj nocną dyżurkę, tylko te dwie postacie i ich ustalone imiona. Bez nowej lokacji, bez rozwiązania całej tajemnicy, bez końcowego monologu.</p>
+<h3>Wariant 1 · ocena 8.00/10</h3><pre>Dioda nagle gaśnie. Olek sprawdza, czy dyktafon się wyłączył.
+
+ANNA
+
+Co się dzieje?
+
+OLEK
+
+Nie wiem, ale ktoś mógł wyłączyć to zdalnie.
+
+Anna sugeruje, że ktoś mógł wyłączyć urządzenie zdalnie.
+
+ANNA
+
+Myślisz, że ktoś próbuje zatrzeć ślady?
+
+OLEK
+
+To możliwe. Musimy lepiej zabezpieczyć nagranie.
+
+Olek proponuje przeniesienie dyktafonu do sejfu.
+
+ANNA
+
+Nie znamy kodu do sejfu.
+
+Anna przypomina, że nie znają kodu do sejfu.
+
+OLEK
+
+No tak, masz rację. Co w takim razie?
+
+Olek sugeruje ukrycie dyktafonu w kieszeni kurtki Anny.
+
+ANNA
+
+To ryzykowne. Mogę go zgubić.
+
+Anna zgadza się, ale obawia się, że może go zgubić.
+
+OLEK
+
+Ale to lepsze niż zostawić go tutaj. Mogę zabezpieczyć go taśmą izolacyjną.
+
+Olek proponuje zabezpieczenie dyktafonu taśmą izolacyjną i umieszczenie go w kieszeni kurtki Anny.</pre>
+<h3>Wariant 2 · ocena 8.00/10</h3><pre>Dioda nagle gaśnie. Olek podnosi dyktafon i sprawdza baterię.
+
+ANNA
+
+Co się stało?
+
+OLEK
+
+(Wzdycha i kręci głową.)
+
+Nie wiem. Może bateria się wyczerpała.
+
+Anna podchodzi i patrzy na urządzenie.
+
+ANNA
+
+(Wskazuje na dyktafon.)
+
+Można go naładować?
+
+OLEK
+
+(Kręci głową.)
+
+Nie mamy ładowarki ani zasilacza. Ale może to ktoś celowo wyłączył.
+
+Anna marszczy brwi i zastanawia się.
+
+ANNA
+
+(Wzdycha i kręci głową.)
+
+To możliwe.
+
+Olek siada na krześle i opiera się o biurko.
+
+OLEK
+
+(Mówi z namysłem.)
+
+Może powinniśmy zabezpieczyć nagranie w inny sposób.
+
+ANNA
+
+(Przygląda się Olkowi.)
+
+Jak?
+
+OLEK
+
+(Wskazuje na telefon.)
+
+Na przykład skopiować je na telefon.
+
+Anna się zastanawia.
+
+ANNA
+
+(Mówi z niepokojem.)
+
+Ale czy to bezpieczne, skoro ktoś już raz ingerował w nasze dowody?
+
+OLEK
+
+(Kiwa głową.)
+
+Racja. Musimy znaleźć trwalsze rozwiązanie.
+
+Anna przypomina sobie o metalowej kasetce.
+
+ANNA
+
+(Mówi z nadzieją.)
+
+Wiem! Możemy schować dyktafon w metalowej kasetce, w której trzymam ważne dokumenty.
+
+Anna podchodzi do biurka i otwiera szufladę.
+
+ANNA
+
+(Wyjmuje klucz.)
+
+Masz rację. To powinno być bezpieczne.
+
+Anna otwiera kasetkę i wkłada do niej dyktafon.
+
+Anna zamyka kasetkę i odkłada ją na bok.
+
+OLEK
+
+Czy ta kasetka jest bezpieczna?
+
+ANNA
+
+(Uśmiecha się lekko.)
+
+Tak. Nikt oprócz mnie nie zna kodu do sejfu, więc powinno być dobrze.
+
+OLEK
+
+Dobrze. To nam wystarczy.</pre>
+</details>
+<details><summary>Scena 21 · 1 wariant(y) · cancelled</summary><p>Napisz krótki dalszy ciąg rozmowy ANNY i OLKA o zabezpieczeniu nagrania. Zachowaj nocną dyżurkę. Nie rozwiązuj zagadki.</p>
+</details>
+<details><summary>Scena 22 · 1 wariant(y) · rejected</summary><p>adada</p>
+</details>
+</html>

@@ -1,0 +1,724 @@
+{
+  "collected_at": "2026-11-10T13:26:13.224892+00:00",
+  "project": {
+    "id": 8,
+    "title": "Test — Ostatni dyżur",
+    "logline": "Podczas nocnego dyżuru dwoje pracowników stacji odkrywa, że ktoś zmienił wpis w księdze."
+  },
+  "acts": [
+    {
+      "id": 18,
+      "title": "Niepokojący wpis",
+      "act_number": 1,
+      "summary": "Nocna stacja. Bohaterowie dopiero szukają dowodów podmiany wpisu. Anna ma klucz do kasetki; Olek nie zna kodu sejfu. Te informacje muszą pozostać spójne."
+    },
+    {
+      "id": 19,
+      "title": "Decyzja",
+      "act_number": 2,
+      "summary": "Bohaterowie wybierają sposób zabezpieczenia nagrania. Nikt nowy nie wchodzi do dyżurki. Planowane rozstrzygnięcie nie jest wydarzeniem, które już zaszło."
+    }
+  ],
+  "scenes": [
+    {
+      "id": 18,
+      "title": "01 — Pusty początek",
+      "act_id": 18,
+      "location_heading": "WN. NOCNA DYŻURKA STACJI",
+      "time_of_day": "NOC",
+      "content_text": "Anna przegląda księgę dyżurów w świetle lampki na biurku. Widzi wpis, którego nie rozpoznaje.\n\nANNA\n\n(Pokazuje Olekowi nieznany wpis.)\n\nOlek, widziałeś ten wpis?\n\nOlek podchodzi do biurka i zerka na księgę.\n\nOLEK\n\nA co? To chyba nic takiego.\n\nAnna patrzy na Oleka wyczekująco, a on wzrusza ramionami.\n\nANNA\n\nTo nie ty go sporządziłeś?\n\nOLEK\n\n(Zaprzecza i sugeruje pomyłkę.)\n\nNie, no co ty! Może to jakaś pomyłka albo... sam nie wiem.\n\nAnna zaznacza datę i godzinę wpisu na kartce.\n\nANNA\n\nSprawdźmy nagranie z monitoringu. Może tam znajdziemy odpowiedź.\n\nOlek kiwa głową i podchodzi do panelu kontrolnego.",
+      "blocks": [
+        {
+          "id": "c6c6018b-3fd1-46c9-8d8c-ddc5251cfe0a",
+          "text": "Anna przegląda księgę dyżurów w świetle lampki na biurku. Widzi wpis, którego nie rozpoznaje.",
+          "type": "action"
+        },
+        {
+          "id": "fecd653c-8481-4c00-8fcf-8e552a6eae1b",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "24fe76a3-0293-456a-bfb5-5fd6eec5dfc5",
+          "text": "(Pokazuje Olekowi nieznany wpis.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "6905352b-c2d6-4be2-a221-b2e8e9c77d0b",
+          "text": "Olek, widziałeś ten wpis?",
+          "type": "dialogue"
+        },
+        {
+          "id": "cc3313f6-a410-4e8e-9129-c10bfd51386f",
+          "text": "Olek podchodzi do biurka i zerka na księgę.",
+          "type": "action"
+        },
+        {
+          "id": "3c6dcb91-0c67-42ce-bc85-ebeb2fbf1b8f",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "232997e0-257a-4151-8621-c515aec00b4e",
+          "text": "A co? To chyba nic takiego.",
+          "type": "dialogue"
+        },
+        {
+          "id": "60100049-ca01-4ffb-bff3-f795f5c1c43f",
+          "text": "Anna patrzy na Oleka wyczekująco, a on wzrusza ramionami.",
+          "type": "action"
+        },
+        {
+          "id": "063bed24-ea8d-4e49-956a-f864a08e445d",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "e09a741e-f806-4df6-940f-27e1625b4582",
+          "text": "To nie ty go sporządziłeś?",
+          "type": "dialogue"
+        },
+        {
+          "id": "c3aa9a5d-de46-4c95-9516-6b6d6c452558",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "d6b259fd-20f1-4974-8fcf-e6315a1a3267",
+          "text": "(Zaprzecza i sugeruje pomyłkę.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "a18ed1b0-595a-4150-a087-de3449b1c54d",
+          "text": "Nie, no co ty! Może to jakaś pomyłka albo... sam nie wiem.",
+          "type": "dialogue"
+        },
+        {
+          "id": "3cce8252-d286-4685-987e-5ee5f55ef794",
+          "text": "Anna zaznacza datę i godzinę wpisu na kartce.",
+          "type": "action"
+        },
+        {
+          "id": "aa4a36f0-b42a-4e17-bc56-98989e540a29",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "451a7f26-d2d8-4a3f-84bc-31c6ac0b2fb0",
+          "text": "Sprawdźmy nagranie z monitoringu. Może tam znajdziemy odpowiedź.",
+          "type": "dialogue"
+        },
+        {
+          "id": "ddff1d1b-8281-4a92-a46a-027ed0be9844",
+          "text": "Olek kiwa głową i podchodzi do panelu kontrolnego.",
+          "type": "action"
+        }
+      ],
+      "prompt_history": [
+        {
+          "id": 62,
+          "scene_id": 18,
+          "user_prompt": "Rozpocznij krótką scenę w nocnej dyżurce stacji. ANNA znajduje w księdze dyżurów wpis, którego nie sporządziła. OLEK próbuje ją zbyć żartem, ale widok wpisu go niepokoi. Zakończ na tym konkretnym odkryciu, bez rozwiązania zagadki. Tylko ANNA i OLEK; do 6 krótkich elementów akcji i wypowiedzi. Wymyśl pasujący nagłówek.",
+          "model_name": "SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M",
+          "created_at": "2026-11-10T12:46:59.353Z"
+        }
+      ],
+      "variants": [
+        {
+          "id": 51,
+          "run_id": 59,
+          "variant_number": 1,
+          "critic_score": "9.00",
+          "is_selected": true
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "02 — Kontynuacja i ciągłość",
+      "act_id": 18,
+      "location_heading": "WN. DYŻURKA STACJI - NOC",
+      "time_of_day": "NOC",
+      "content_text": "Anna zamyka metalową kasetkę i chowa jedyny klucz do wewnętrznej kieszeni kurtki. Olek odkłada telefon na biurko.\n\nOLEK\n\nW nagraniu brakuje ostatniej minuty.\n\nOlek podchodzi do biurka i przygląda się obudowie dyktafonu.\n\nOLEK\n\n(Zauważa świeże zadrapanie.)\n\nHej, Anka, widziałaś to?\n\nAnna podchodzi do Oleka i spogląda na obudowę dyktafonu.\n\nANNA\n\n(Zaniepokojona zadrapaniem.)\n\nCo to jest?\n\nOLEK\n\n(Proponuje zabezpieczenie urządzenia.)\n\nTo wygląda na świeże zadrapanie. Może ktoś próbował coś zrobić z dyktafonem?\n\nAnna kiwa głową i myśli przez chwilę.\n\nANNA\n\n(Podejmuje decyzję o zabezpieczeniu urządzenia.)\n\nMasz rację. Musimy lepiej zabezpieczyć dyktafon.\n\nAnna otwiera metalową kasetkę i wyjmuje jedyny klucz.\n\nOlek przygląda się, jak Anna wkłada klucz do kieszeni kurtki.\n\nAnna zamyka kasetkę i odkłada ją na biurko.\n\nANNA\n\nTylko ja mam klucz, Olek. A kod do sejfu znam tylko ja.\n\nOlek kiwa głową, rozumiejąc sytuację.\n\nOLEK\n\nMyślisz, że ktoś próbował zatrzeć ślady?\n\nANNA\n\nTo możliwe. Lepiej, żeby nikt go nie znalazł.\n\nAnna wkłada dyktafon do kieszeni kurtki.\n\nOLEK\n\nMogę trzymać kasetkę z nagraniem w sejfie.\n\nANNA\n\nNie, Olek. Tylko ja znam kod. Muszę trzymać kasetkę przy sobie.\n\nOlek wzdycha, akceptując decyzję Anny.\n\nANNA\n\nWiem, że to ryzykowne, ale musimy być ostrożni. Będę trzymać kasetkę przy sobie.\n\nOLEK\n\nUfasz mi z sejfem, Anka?\n\nANNA\n\nNie mamy wyboru, Olek. Ale musimy być ostrożni.\n\nOLEK\n\n(Sugeruje poinformowanie kogoś o sytuacji.)\n\nMoże powinniśmy poinformować kogoś o tym wszystkim?\n\nANNA\n\nNie, Olek. Musimy sami rozwiązać ten problem.",
+      "blocks": [
+        {
+          "id": "a68c2f23-4635-4585-868e-71775a3c37f1",
+          "text": "Anna zamyka metalową kasetkę i chowa jedyny klucz do wewnętrznej kieszeni kurtki. Olek odkłada telefon na biurko.",
+          "type": "action"
+        },
+        {
+          "id": "46637075-0ea7-4044-a145-6482a61a67c9",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "553c4095-41d5-4fb3-b300-0b7b18b8ab02",
+          "text": "W nagraniu brakuje ostatniej minuty.",
+          "type": "dialogue"
+        },
+        {
+          "id": "1aaa41c4-8381-404d-8fda-bc1dfb092d50",
+          "text": "Olek podchodzi do biurka i przygląda się obudowie dyktafonu.",
+          "type": "action"
+        },
+        {
+          "id": "b4ac3a60-217d-466b-9142-ea80622097da",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "07e61784-75e1-49e2-b6fd-80c659dbc934",
+          "text": "(Zauważa świeże zadrapanie.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "da08fad1-9d01-427a-a788-b5cd4aa44298",
+          "text": "Hej, Anka, widziałaś to?",
+          "type": "dialogue"
+        },
+        {
+          "id": "faa18c62-d2a9-454b-ba79-4439538b7218",
+          "text": "Anna podchodzi do Oleka i spogląda na obudowę dyktafonu.",
+          "type": "action"
+        },
+        {
+          "id": "a5e8ee38-a992-4eca-ae09-7b337ca1ab13",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "7833848b-6687-45fc-8603-e099c174ca4e",
+          "text": "(Zaniepokojona zadrapaniem.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "b97a6d85-55a8-40c3-b8f4-130bfbebe13a",
+          "text": "Co to jest?",
+          "type": "dialogue"
+        },
+        {
+          "id": "4ab5d416-d6cf-4732-b196-90868980e79b",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "7fe24e24-85dc-4e05-b59c-d0d21e7aff62",
+          "text": "(Proponuje zabezpieczenie urządzenia.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "52738714-5e00-45af-a8c3-bd5f1ba8ff59",
+          "text": "To wygląda na świeże zadrapanie. Może ktoś próbował coś zrobić z dyktafonem?",
+          "type": "dialogue"
+        },
+        {
+          "id": "80c86bb4-038f-4762-abdd-0e740f83f48b",
+          "text": "Anna kiwa głową i myśli przez chwilę.",
+          "type": "action"
+        },
+        {
+          "id": "6072f911-8ec4-40bd-8b81-433e2b2c0432",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "56f7486b-c31d-479c-849e-4a059ae3c4a6",
+          "text": "(Podejmuje decyzję o zabezpieczeniu urządzenia.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "b170340a-3454-4773-b887-5087f56a831e",
+          "text": "Masz rację. Musimy lepiej zabezpieczyć dyktafon.",
+          "type": "dialogue"
+        },
+        {
+          "id": "353103ea-10c3-4b38-b45a-c7762a24b7ca",
+          "text": "Anna otwiera metalową kasetkę i wyjmuje jedyny klucz.",
+          "type": "action"
+        },
+        {
+          "id": "f94afc8e-e2c4-4b25-b6c3-08f85079e324",
+          "text": "Olek przygląda się, jak Anna wkłada klucz do kieszeni kurtki.",
+          "type": "action"
+        },
+        {
+          "id": "d19527d1-1042-471c-896a-5bc6ec721a05",
+          "text": "Anna zamyka kasetkę i odkłada ją na biurko.",
+          "type": "action"
+        },
+        {
+          "id": "8cc64bae-f4c0-4f11-a1d6-4fe74ec0d5cf",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "20a35350-ecab-4738-9edb-bf80b458d7a3",
+          "text": "Tylko ja mam klucz, Olek. A kod do sejfu znam tylko ja.",
+          "type": "dialogue"
+        },
+        {
+          "id": "cbba9794-27ec-45a6-9a83-80a301a7c0e8",
+          "text": "Olek kiwa głową, rozumiejąc sytuację.",
+          "type": "action"
+        },
+        {
+          "id": "b0967a9a-c26f-4a44-9cf2-cdd7b52fa61c",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "879e6780-87a5-4b5b-852a-fc28c2720998",
+          "text": "Myślisz, że ktoś próbował zatrzeć ślady?",
+          "type": "dialogue"
+        },
+        {
+          "id": "bc92d122-62e8-40c1-b999-c117fcec842e",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "59d74095-d511-4e5e-ae5a-aeac0bb07258",
+          "text": "To możliwe. Lepiej, żeby nikt go nie znalazł.",
+          "type": "dialogue"
+        },
+        {
+          "id": "4a038bce-8776-49c5-a0c2-19accc48503e",
+          "text": "Anna wkłada dyktafon do kieszeni kurtki.",
+          "type": "action"
+        },
+        {
+          "id": "f6ae5b85-b8b8-4291-8e6c-4e0914dbcc65",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "56effbc1-9109-4c4f-998b-0d526e8959c5",
+          "text": "Mogę trzymać kasetkę z nagraniem w sejfie.",
+          "type": "dialogue"
+        },
+        {
+          "id": "57f04b6c-550a-4cca-8d55-fc8e3427ae62",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "6425050f-d684-4f61-b4b4-53bec5df718c",
+          "text": "Nie, Olek. Tylko ja znam kod. Muszę trzymać kasetkę przy sobie.",
+          "type": "dialogue"
+        },
+        {
+          "id": "b25b771d-2d34-4021-b346-bba8b4f92ee9",
+          "text": "Olek wzdycha, akceptując decyzję Anny.",
+          "type": "action"
+        },
+        {
+          "id": "ced85698-92f8-4c7a-a022-be6cd6ac7738",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "6d7a146b-b865-4b0a-8b8a-1f7a99a48b91",
+          "text": "Wiem, że to ryzykowne, ale musimy być ostrożni. Będę trzymać kasetkę przy sobie.",
+          "type": "dialogue"
+        },
+        {
+          "id": "fb2642a7-9a6f-4e7d-ac42-3e60a91ed2a2",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "b03e2200-f03f-4181-a02d-fed748bd73fa",
+          "text": "Ufasz mi z sejfem, Anka?",
+          "type": "dialogue"
+        },
+        {
+          "id": "439987c6-b4d0-4a84-a17b-fb2b96b36eaa",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "fb7deb56-ebe0-457f-84e2-30f1b5ff6ea5",
+          "text": "Nie mamy wyboru, Olek. Ale musimy być ostrożni.",
+          "type": "dialogue"
+        },
+        {
+          "id": "c47d2116-fc1c-4060-a2c6-9b77725040e0",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "ab39b544-0c87-4fe9-af64-41f7d90ea8da",
+          "text": "(Sugeruje poinformowanie kogoś o sytuacji.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "9a1847db-aa7e-4b3f-a418-84a47f777711",
+          "text": "Może powinniśmy poinformować kogoś o tym wszystkim?",
+          "type": "dialogue"
+        },
+        {
+          "id": "029ba3f3-a6f7-4c88-80aa-7a8c596b6c31",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "cb6c787e-7c36-4dc5-97bf-1f70ca3417dd",
+          "text": "Nie, Olek. Musimy sami rozwiązać ten problem.",
+          "type": "dialogue"
+        }
+      ],
+      "prompt_history": [
+        {
+          "id": 63,
+          "scene_id": 19,
+          "user_prompt": "Dopisz krótki dalszy ciąg tej sceny, bez powtarzania początku. OLEK zauważa na obudowie dyktafonu świeże zadrapanie i proponuje zabezpieczenie urządzenia. ANNA podejmuje konkretną decyzję. Jedyny klucz nadal jest w kieszeni ANNY, a OLEK nie zna kodu sejfu. Nie zmieniaj miejsca ani pory dnia i nie rozwiązuj zagadki. Tylko ANNA i OLEK.",
+          "model_name": "SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M",
+          "created_at": "2026-11-10T12:52:17.212Z"
+        }
+      ],
+      "variants": [
+        {
+          "id": 52,
+          "run_id": 60,
+          "variant_number": 1,
+          "critic_score": "8.00",
+          "is_selected": true
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "title": "06 — Przenoszenie i eksport",
+      "act_id": 19,
+      "location_heading": "WN. KORYTARZ STACJI - NOC",
+      "time_of_day": "NOC",
+      "content_text": "Na korytarzu gaśnie światło. Anna zatrzymuje się przy drzwiach dyżurki.",
+      "blocks": [
+        {
+          "id": "dd88d78d-cf9a-494d-855b-242067180995",
+          "text": "Na korytarzu gaśnie światło. Anna zatrzymuje się przy drzwiach dyżurki.",
+          "type": "action"
+        }
+      ],
+      "prompt_history": [],
+      "variants": []
+    },
+    {
+      "id": 20,
+      "title": "03 — Porównanie dwóch wariantów",
+      "act_id": 19,
+      "location_heading": "WN. DYŻURKA STACJI",
+      "time_of_day": "NOC",
+      "content_text": "Olek stawia dyktafon na biurku. Na obudowie miga zielona dioda.\n\nDioda nagle gaśnie. Olek podnosi dyktafon i sprawdza baterię.\n\nANNA\n\nCo się stało?\n\nOLEK\n\n(Wzdycha i kręci głową.)\n\nNie wiem. Może bateria się wyczerpała.\n\nAnna podchodzi i patrzy na urządzenie.\n\nANNA\n\n(Wskazuje na dyktafon.)\n\nMożna go naładować?\n\nOLEK\n\n(Kręci głową.)\n\nNie mamy ładowarki ani zasilacza. Ale może to ktoś celowo wyłączył.\n\nAnna marszczy brwi i zastanawia się.\n\nANNA\n\n(Wzdycha i kręci głową.)\n\nTo możliwe.\n\nOlek siada na krześle i opiera się o biurko.\n\nOLEK\n\n(Mówi z namysłem.)\n\nMoże powinniśmy zabezpieczyć nagranie w inny sposób.\n\nANNA\n\n(Przygląda się Olkowi.)\n\nJak?\n\nOLEK\n\n(Wskazuje na telefon.)\n\nNa przykład skopiować je na telefon.\n\nAnna się zastanawia.\n\nANNA\n\n(Mówi z niepokojem.)\n\nAle czy to bezpieczne, skoro ktoś już raz ingerował w nasze dowody?\n\nOLEK\n\n(Kiwa głową.)\n\nRacja. Musimy znaleźć trwalsze rozwiązanie.\n\nAnna przypomina sobie o metalowej kasetce.\n\nANNA\n\n(Mówi z nadzieją.)\n\nWiem! Możemy schować dyktafon w metalowej kasetce, w której trzymam ważne dokumenty.\n\nAnna podchodzi do biurka i otwiera szufladę.\n\nANNA\n\n(Wyjmuje klucz.)\n\nMasz rację. To powinno być bezpieczne.\n\nAnna otwiera kasetkę i wkłada do niej dyktafon.\n\nAnna zamyka kasetkę i odkłada ją na bok.\n\nOLEK\n\nCzy ta kasetka jest bezpieczna?\n\nANNA\n\n(Uśmiecha się lekko.)\n\nTak. Nikt oprócz mnie nie zna kodu do sejfu, więc powinno być dobrze.\n\nOLEK\n\nDobrze. To nam wystarczy.",
+      "blocks": [
+        {
+          "id": "10e0be81-7f81-4f26-9d69-7d8f3c652de2",
+          "text": "Olek stawia dyktafon na biurku. Na obudowie miga zielona dioda.",
+          "type": "action"
+        },
+        {
+          "id": "6bb54d2f-1db8-46e3-bb82-f2051d4e1704",
+          "text": "Dioda nagle gaśnie. Olek podnosi dyktafon i sprawdza baterię.",
+          "type": "action"
+        },
+        {
+          "id": "a1d30471-631f-45cf-9508-6f2860853b6b",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "9afe25d9-0c25-4a1f-b31c-78964e28d67f",
+          "text": "Co się stało?",
+          "type": "dialogue"
+        },
+        {
+          "id": "0fb5170f-a4e7-484f-95de-23ac7643efd4",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "f269d133-a2c8-4f52-b020-a0dc580764b3",
+          "text": "(Wzdycha i kręci głową.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "5e87241a-fdee-4402-80b9-979f04a0ecb7",
+          "text": "Nie wiem. Może bateria się wyczerpała.",
+          "type": "dialogue"
+        },
+        {
+          "id": "777a4074-07ee-4650-841c-225d54c79f3b",
+          "text": "Anna podchodzi i patrzy na urządzenie.",
+          "type": "action"
+        },
+        {
+          "id": "2ecba151-cdef-4e3f-8b0d-63ff06e87952",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "c01a1657-7945-41b9-bab6-7a1024b5e287",
+          "text": "(Wskazuje na dyktafon.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "43fa5025-af74-43d6-a2a7-7cf4999bd22a",
+          "text": "Można go naładować?",
+          "type": "dialogue"
+        },
+        {
+          "id": "0a9c6a85-fee5-44cd-8848-37bf03fb0bc4",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "e4144a8a-02b4-452b-85d6-b1a4ba62a0af",
+          "text": "(Kręci głową.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "95cecd08-5dbb-4436-9003-9e1d2b77a962",
+          "text": "Nie mamy ładowarki ani zasilacza. Ale może to ktoś celowo wyłączył.",
+          "type": "dialogue"
+        },
+        {
+          "id": "67b98d97-1d5b-47ee-936f-6ae3819c178d",
+          "text": "Anna marszczy brwi i zastanawia się.",
+          "type": "action"
+        },
+        {
+          "id": "dd34a319-8cce-41e4-9f40-c44ad5ff6653",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "75ba51d3-8a14-4918-a8d9-b684135d8e30",
+          "text": "(Wzdycha i kręci głową.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "6f0155a3-3d40-40cc-9dd1-8dea8e142901",
+          "text": "To możliwe.",
+          "type": "dialogue"
+        },
+        {
+          "id": "567da3dc-a2f0-42cd-95cd-725108aa0401",
+          "text": "Olek siada na krześle i opiera się o biurko.",
+          "type": "action"
+        },
+        {
+          "id": "d14ae942-6bb3-4829-abf4-5082fd2fb4af",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "e685ef23-8c5f-4beb-88f0-cbbea3baaf64",
+          "text": "(Mówi z namysłem.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "b8d8efbe-39cd-4dfb-98ad-4a0efb4ea07e",
+          "text": "Może powinniśmy zabezpieczyć nagranie w inny sposób.",
+          "type": "dialogue"
+        },
+        {
+          "id": "8a86c193-fcbf-428f-86af-6a9a7e390b73",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "cfe31d1d-7265-418b-a75c-1e2fe656ccd9",
+          "text": "(Przygląda się Olkowi.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "b5f39c47-3ab6-46c5-afc6-153108084d86",
+          "text": "Jak?",
+          "type": "dialogue"
+        },
+        {
+          "id": "92290326-9c1f-4a51-b0fa-06c2d96c7a71",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "0c8cbf34-656d-4b66-ad51-847dba1f4daa",
+          "text": "(Wskazuje na telefon.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "42ca5cb0-296a-4039-8119-c642484ac48b",
+          "text": "Na przykład skopiować je na telefon.",
+          "type": "dialogue"
+        },
+        {
+          "id": "b3a659d1-9451-45a7-8bb6-a4a389105b45",
+          "text": "Anna się zastanawia.",
+          "type": "action"
+        },
+        {
+          "id": "a071aeb1-d298-44f9-b25d-1ef747121f80",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "f9319885-9e7b-42f2-b8bd-8e3c057bcd42",
+          "text": "(Mówi z niepokojem.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "efd67ecf-b095-4601-935c-3188a6099240",
+          "text": "Ale czy to bezpieczne, skoro ktoś już raz ingerował w nasze dowody?",
+          "type": "dialogue"
+        },
+        {
+          "id": "39ed65ec-e961-4531-b0b3-9f391af7272f",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "0d017eb2-e4cc-491d-a00b-3032673e9b56",
+          "text": "(Kiwa głową.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "dac9487a-61b4-459c-937f-15b8c0a1c1e6",
+          "text": "Racja. Musimy znaleźć trwalsze rozwiązanie.",
+          "type": "dialogue"
+        },
+        {
+          "id": "29f6c64e-7fa1-4a48-a212-627ea0a128fd",
+          "text": "Anna przypomina sobie o metalowej kasetce.",
+          "type": "action"
+        },
+        {
+          "id": "516635b8-73c1-4c11-87bd-8107875229d5",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "d988d16d-5bb7-4d3a-8db7-410e835fbf83",
+          "text": "(Mówi z nadzieją.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "0b95d472-ce72-4ddb-9a6b-fdb98fd3d118",
+          "text": "Wiem! Możemy schować dyktafon w metalowej kasetce, w której trzymam ważne dokumenty.",
+          "type": "dialogue"
+        },
+        {
+          "id": "f65984e1-9d71-4931-aeeb-a7fd66e21304",
+          "text": "Anna podchodzi do biurka i otwiera szufladę.",
+          "type": "action"
+        },
+        {
+          "id": "fe0c9efa-3228-4e3f-8975-b30db66e57cb",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "dd6d7a6e-c385-48f3-991e-ec344c9d7520",
+          "text": "(Wyjmuje klucz.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "9188e444-51ac-4def-87fd-da27a7b2088f",
+          "text": "Masz rację. To powinno być bezpieczne.",
+          "type": "dialogue"
+        },
+        {
+          "id": "12b1a743-0ab7-43ba-a701-13f1b06b1529",
+          "text": "Anna otwiera kasetkę i wkłada do niej dyktafon.",
+          "type": "action"
+        },
+        {
+          "id": "3335afcb-0222-4cef-bade-0876e9384896",
+          "text": "Anna zamyka kasetkę i odkłada ją na bok.",
+          "type": "action"
+        },
+        {
+          "id": "b0392c8b-2ecb-4a6e-a925-8b5a4d77d47f",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "aa6202fd-e569-4379-9b74-7706c626bba7",
+          "text": "Czy ta kasetka jest bezpieczna?",
+          "type": "dialogue"
+        },
+        {
+          "id": "949ad489-3ac5-4963-8e13-13c8060aa5fa",
+          "text": "ANNA",
+          "type": "character"
+        },
+        {
+          "id": "dcb6feba-69c1-4534-b3db-46ad18051554",
+          "text": "(Uśmiecha się lekko.)",
+          "type": "parenthetical"
+        },
+        {
+          "id": "26244e7c-e5ea-4217-b821-f6b45a4ffe73",
+          "text": "Tak. Nikt oprócz mnie nie zna kodu do sejfu, więc powinno być dobrze.",
+          "type": "dialogue"
+        },
+        {
+          "id": "d8f9e84f-7699-4008-b5dc-c1a0b0b83e67",
+          "text": "OLEK",
+          "type": "character"
+        },
+        {
+          "id": "502f91f7-121a-41ad-baf8-538acd67a877",
+          "text": "Dobrze. To nam wystarczy.",
+          "type": "dialogue"
+        }
+      ],
+      "prompt_history": [
+        {
+          "id": 64,
+          "scene_id": 20,
+          "user_prompt": "Dopisz krótkie zakończenie tej sceny: ANNA i OLEK muszą zdecydować, jak zabezpieczyć dyktafon. Dioda nagle gaśnie; ich decyzja ma wynikać z tego widocznego szczegółu. Zachowaj nocną dyżurkę, tylko te dwie postacie i ich ustalone imiona. Bez nowej lokacji, bez rozwiązania całej tajemnicy, bez końcowego monologu.",
+          "model_name": "SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M",
+          "created_at": "2026-11-10T12:54:38.703Z"
+        }
+      ],
+      "variants": [
+        {
+          "id": 54,
+          "run_id": 61,
+          "variant_number": 2,
+          "critic_score": "8.00",
+          "is_selected": true
+        },
+        {
+          "id": 53,
+          "run_id": 61,
+          "variant_number": 1,
+          "critic_score": "8.00",
+          "is_selected": false
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "title": "04 — Anulowanie",
+      "act_id": 19,
+      "location_heading": "WN. DYŻURKA STACJI - NOC",
+      "time_of_day": "NOC",
+      "content_text": "",
+      "blocks": [],
+      "prompt_history": [],
+      "variants": []
+    },
+    {
+      "id": 22,
+      "title": "05 — Walidacja polecenia",
+      "act_id": 18,
+      "location_heading": "",
+      "time_of_day": "",
+      "content_text": "",
+      "blocks": [],
+      "prompt_history": [],
+      "variants": []
+    }
+  ]
+}

@@ -1,0 +1,259 @@
+{
+  "date": "2026-11-10",
+  "model": "SpeakLeash/bielik-11b-v2.3-instruct:Q4_K_M",
+  "runs": [
+    {
+      "scene_id": 18,
+      "user_prompt": "Rozpocznij krótką scenę w nocnej dyżurce stacji. ANNA znajduje w księdze dyżurów wpis, którego nie sporządziła. OLEK próbuje ją zbyć żartem, ale widok wpisu go niepokoi. Zakończ na tym konkretnym odkryciu, bez rozwiązania zagadki. Tylko ANNA i OLEK; do 6 krótkich elementów akcji i wypowiedzi. Wymyśl pasujący nagłówek.",
+      "variant_count": 1,
+      "status": "completed",
+      "run_id": 59,
+      "duration_ms": 79351,
+      "agents": [
+        {
+          "name": "Archiwista",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 28019
+        },
+        {
+          "name": "Reżyser",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 8807
+        },
+        {
+          "name": "Scenarzysta",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 24672
+        },
+        {
+          "name": "Krytyk",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 17730
+        }
+      ],
+      "variants": [
+        {
+          "id": 51,
+          "variant_number": 1,
+          "generated_full_text": "Anna przegląda księgę dyżurów w świetle lampki na biurku. Widzi wpis, którego nie rozpoznaje.\n\nANNA\n\n(Pokazuje Olekowi nieznany wpis.)\n\nOlek, widziałeś ten wpis?\n\nOlek podchodzi do biurka i zerka na księgę.\n\nOLEK\n\nA co? To chyba nic takiego.\n\nAnna patrzy na Oleka wyczekująco, a on wzrusza ramionami.\n\nANNA\n\nTo nie ty go sporządziłeś?\n\nOLEK\n\n(Zaprzecza i sugeruje pomyłkę.)\n\nNie, no co ty! Może to jakaś pomyłka albo... sam nie wiem.\n\nAnna zaznacza datę i godzinę wpisu na kartce.\n\nANNA\n\nSprawdźmy nagranie z monitoringu. Może tam znajdziemy odpowiedź.\n\nOlek kiwa głową i podchodzi do panelu kontrolnego.",
+          "critic_score": "9.00",
+          "critic_feedback": "Cel: Anna zauważa obcy wpis w księdze; Olek przestaje żartować. Nie rozwiązuj jeszcze zagadki. Realizacja: Scena skutecznie przedstawia odkrycie Anny i reakcję Oleka, zachowując napięcie i zainteresowanie widza. Najważniejszy wniosek: Scena jest spójna z profilem psychologicznym postaci i celami sceny, a dialogi są naturalne i realistyczne. Zalecenie: Rozważ dodanie więcej szczegółów dotyczących treści wpisu, aby wzmocnić zainteresowanie widza i zwiększyć napięcie."
+        }
+      ]
+    },
+    {
+      "scene_id": 19,
+      "user_prompt": "Dopisz krótki dalszy ciąg tej sceny, bez powtarzania początku. OLEK zauważa na obudowie dyktafonu świeże zadrapanie i proponuje zabezpieczenie urządzenia. ANNA podejmuje konkretną decyzję. Jedyny klucz nadal jest w kieszeni ANNY, a OLEK nie zna kodu sejfu. Nie zmieniaj miejsca ani pory dnia i nie rozwiązuj zagadki. Tylko ANNA i OLEK.",
+      "variant_count": 1,
+      "status": "completed",
+      "run_id": 60,
+      "duration_ms": 116704,
+      "agents": [
+        {
+          "name": "Archiwista",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 21300
+        },
+        {
+          "name": "Reżyser",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 17571
+        },
+        {
+          "name": "Scenarzysta",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 63853
+        },
+        {
+          "name": "Krytyk",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 13927
+        }
+      ],
+      "variants": [
+        {
+          "id": 52,
+          "variant_number": 1,
+          "generated_full_text": "Olek podchodzi do biurka i przygląda się obudowie dyktafonu.\n\nOLEK\n\n(Zauważa świeże zadrapanie.)\n\nHej, Anka, widziałaś to?\n\nAnna podchodzi do Oleka i spogląda na obudowę dyktafonu.\n\nANNA\n\n(Zaniepokojona zadrapaniem.)\n\nCo to jest?\n\nOLEK\n\n(Proponuje zabezpieczenie urządzenia.)\n\nTo wygląda na świeże zadrapanie. Może ktoś próbował coś zrobić z dyktafonem?\n\nAnna kiwa głową i myśli przez chwilę.\n\nANNA\n\n(Podejmuje decyzję o zabezpieczeniu urządzenia.)\n\nMasz rację. Musimy lepiej zabezpieczyć dyktafon.\n\nAnna otwiera metalową kasetkę i wyjmuje jedyny klucz.\n\nOlek przygląda się, jak Anna wkłada klucz do kieszeni kurtki.\n\nAnna zamyka kasetkę i odkłada ją na biurko.\n\nANNA\n\nTylko ja mam klucz, Olek. A kod do sejfu znam tylko ja.\n\nOlek kiwa głową, rozumiejąc sytuację.\n\nOLEK\n\nMyślisz, że ktoś próbował zatrzeć ślady?\n\nANNA\n\nTo możliwe. Lepiej, żeby nikt go nie znalazł.\n\nAnna wkłada dyktafon do kieszeni kurtki.\n\nOLEK\n\nMogę trzymać kasetkę z nagraniem w sejfie.\n\nANNA\n\nNie, Olek. Tylko ja znam kod. Muszę trzymać kasetkę przy sobie.\n\nOlek wzdycha, akceptując decyzję Anny.\n\nANNA\n\nWiem, że to ryzykowne, ale musimy być ostrożni. Będę trzymać kasetkę przy sobie.\n\nOLEK\n\nUfasz mi z sejfem, Anka?\n\nANNA\n\nNie mamy wyboru, Olek. Ale musimy być ostrożni.\n\nOLEK\n\n(Sugeruje poinformowanie kogoś o sytuacji.)\n\nMoże powinniśmy poinformować kogoś o tym wszystkim?\n\nANNA\n\nNie, Olek. Musimy sami rozwiązać ten problem.",
+          "critic_score": "8.00",
+          "critic_feedback": "Cel: Utrzymać klucz u ANNY. OLEK nie zna kodu sejfu. Kolejny materialny ślad zmienia ich decyzję. Ocena: Scena skutecznie realizuje cel, podkreślając znaczenie zabezpieczenia dowodu i utrzymując napięcie między postaciami. Najważniejszy wniosek: Scena dobrze oddaje dynamikę relacji między Anną a Olekiem, pokazując ich wzajemne zaufanie i obawy o bezpieczeństwo dowodu. Zalecenie: Rozważ dodanie więcej dialogów, które podkreślą obawy Oleka o utratę pracy i jego chęć do pomocy Annie."
+        }
+      ]
+    },
+    {
+      "scene_id": 20,
+      "user_prompt": "Dopisz krótkie zakończenie tej sceny: ANNA i OLEK muszą zdecydować, jak zabezpieczyć dyktafon. Dioda nagle gaśnie; ich decyzja ma wynikać z tego widocznego szczegółu. Zachowaj nocną dyżurkę, tylko te dwie postacie i ich ustalone imiona. Bez nowej lokacji, bez rozwiązania całej tajemnicy, bez końcowego monologu.",
+      "variant_count": 2,
+      "status": "completed",
+      "run_id": 61,
+      "duration_ms": 165879,
+      "agents": [
+        {
+          "name": "Archiwista",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 20661
+        },
+        {
+          "name": "Reżyser",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 10915
+        },
+        {
+          "name": "Scenarzysta",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 30020
+        },
+        {
+          "name": "Krytyk",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 15906
+        },
+        {
+          "name": "Reżyser",
+          "variant_number": 2,
+          "status": "completed",
+          "duration_ms": 17724
+        },
+        {
+          "name": "Scenarzysta",
+          "variant_number": 2,
+          "status": "completed",
+          "duration_ms": 57635
+        },
+        {
+          "name": "Krytyk",
+          "variant_number": 2,
+          "status": "completed",
+          "duration_ms": 12955
+        }
+      ],
+      "variants": [
+        {
+          "id": 53,
+          "variant_number": 1,
+          "generated_full_text": "Dioda nagle gaśnie. Olek sprawdza, czy dyktafon się wyłączył.\n\nANNA\n\nCo się dzieje?\n\nOLEK\n\nNie wiem, ale ktoś mógł wyłączyć to zdalnie.\n\nAnna sugeruje, że ktoś mógł wyłączyć urządzenie zdalnie.\n\nANNA\n\nMyślisz, że ktoś próbuje zatrzeć ślady?\n\nOLEK\n\nTo możliwe. Musimy lepiej zabezpieczyć nagranie.\n\nOlek proponuje przeniesienie dyktafonu do sejfu.\n\nANNA\n\nNie znamy kodu do sejfu.\n\nAnna przypomina, że nie znają kodu do sejfu.\n\nOLEK\n\nNo tak, masz rację. Co w takim razie?\n\nOlek sugeruje ukrycie dyktafonu w kieszeni kurtki Anny.\n\nANNA\n\nTo ryzykowne. Mogę go zgubić.\n\nAnna zgadza się, ale obawia się, że może go zgubić.\n\nOLEK\n\nAle to lepsze niż zostawić go tutaj. Mogę zabezpieczyć go taśmą izolacyjną.\n\nOlek proponuje zabezpieczenie dyktafonu taśmą izolacyjną i umieszczenie go w kieszeni kurtki Anny.",
+          "critic_score": "8.00",
+          "critic_feedback": "Cel: ANNA i OLEK decydują, jak zabezpieczyć nagranie. Wybór ma wynikać z widocznego szczegółu, nie z monologu. Ocena: Scena skutecznie przedstawia decyzję bohaterów o zabezpieczeniu dyktafonu, wykorzystując widoczny szczegół (dioda gaśnie). Najważniejszy wniosek: Scena jest spójna z profilem psychologicznym postaci i ich wcześniejszymi działaniami. Olek reaguje impulsywnie, a Anna zachowuje ostrożność i praktyczne podejście. Zakończenie sceny jest naturalne i wynika z wcześniejszych wydarzeń."
+        },
+        {
+          "id": 54,
+          "variant_number": 2,
+          "generated_full_text": "Dioda nagle gaśnie. Olek podnosi dyktafon i sprawdza baterię.\n\nANNA\n\nCo się stało?\n\nOLEK\n\n(Wzdycha i kręci głową.)\n\nNie wiem. Może bateria się wyczerpała.\n\nAnna podchodzi i patrzy na urządzenie.\n\nANNA\n\n(Wskazuje na dyktafon.)\n\nMożna go naładować?\n\nOLEK\n\n(Kręci głową.)\n\nNie mamy ładowarki ani zasilacza. Ale może to ktoś celowo wyłączył.\n\nAnna marszczy brwi i zastanawia się.\n\nANNA\n\n(Wzdycha i kręci głową.)\n\nTo możliwe.\n\nOlek siada na krześle i opiera się o biurko.\n\nOLEK\n\n(Mówi z namysłem.)\n\nMoże powinniśmy zabezpieczyć nagranie w inny sposób.\n\nANNA\n\n(Przygląda się Olkowi.)\n\nJak?\n\nOLEK\n\n(Wskazuje na telefon.)\n\nNa przykład skopiować je na telefon.\n\nAnna się zastanawia.\n\nANNA\n\n(Mówi z niepokojem.)\n\nAle czy to bezpieczne, skoro ktoś już raz ingerował w nasze dowody?\n\nOLEK\n\n(Kiwa głową.)\n\nRacja. Musimy znaleźć trwalsze rozwiązanie.\n\nAnna przypomina sobie o metalowej kasetce.\n\nANNA\n\n(Mówi z nadzieją.)\n\nWiem! Możemy schować dyktafon w metalowej kasetce, w której trzymam ważne dokumenty.\n\nAnna podchodzi do biurka i otwiera szufladę.\n\nANNA\n\n(Wyjmuje klucz.)\n\nMasz rację. To powinno być bezpieczne.\n\nAnna otwiera kasetkę i wkłada do niej dyktafon.\n\nAnna zamyka kasetkę i odkłada ją na bok.\n\nOLEK\n\nCzy ta kasetka jest bezpieczna?\n\nANNA\n\n(Uśmiecha się lekko.)\n\nTak. Nikt oprócz mnie nie zna kodu do sejfu, więc powinno być dobrze.\n\nOLEK\n\nDobrze. To nam wystarczy.",
+          "critic_score": "8.00",
+          "critic_feedback": "Cel: ANNA i OLEK decydują, jak zabezpieczyć nagranie. Wybór ma wynikać z widocznego szczegółu, nie z monologu. Ocena: Scena skutecznie przedstawia proces decyzyjny bohaterów w odpowiedzi na nagłe zgaśnięcie diody dyktafonu. Postacie reagują spójnie z ich profilami psychologicznymi i celami. Najważniejszy wniosek: Scena jest spójna i realistyczna, jednak można ją wzbogacić o dodatkowe napięcie i niepewność co do bezpieczeństwa nagrania."
+        }
+      ]
+    },
+    {
+      "scene_id": 21,
+      "user_prompt": "Napisz krótki dalszy ciąg rozmowy ANNY i OLKA o zabezpieczeniu nagrania. Zachowaj nocną dyżurkę. Nie rozwiązuj zagadki.",
+      "variant_count": 1,
+      "status": "cancelled",
+      "run_id": 62,
+      "duration_ms": null,
+      "agents": [
+        {
+          "name": "Archiwista",
+          "variant_number": 1,
+          "status": "completed",
+          "duration_ms": 20733
+        },
+        {
+          "name": "Reżyser",
+          "variant_number": 1,
+          "status": "cancelled",
+          "duration_ms": 1490
+        }
+      ],
+      "variants": []
+    },
+    {
+      "scene_id": 22,
+      "user_prompt": "adada",
+      "variant_count": 1,
+      "status": "rejected",
+      "run_id": null,
+      "duration_ms": null,
+      "agents": [],
+      "variants": []
+    }
+  ],
+  "checks": [
+    {
+      "name": "Wariant nie zmienia pustej sceny przed zastosowaniem",
+      "passed": true
+    },
+    {
+      "name": "Zastosowanie zapisuje typowane bloki wariantu",
+      "passed": true
+    },
+    {
+      "name": "Cofnięcie usuwa cały wariant i wygenerowany nagłówek",
+      "passed": true
+    },
+    {
+      "name": "Kontynuacja zachowuje oryginalne bloki i dopisuje wynik",
+      "passed": true
+    },
+    {
+      "name": "Dwa warianty są różnymi tekstami",
+      "passed": true
+    },
+    {
+      "name": "Pierwszy wariant dopisany do bazy sceny",
+      "passed": true
+    },
+    {
+      "name": "Drugi wariant zastępuje pierwszy fragment bez akumulacji",
+      "passed": true
+    },
+    {
+      "name": "Ponowne zastosowanie drugiego nie duplikuje tekstu",
+      "passed": true
+    },
+    {
+      "name": "Cofnięcie zamiany przywraca pierwszy wariant",
+      "passed": true
+    },
+    {
+      "name": "Anulowanie bez wariantów i historii sukcesu",
+      "passed": true
+    },
+    {
+      "name": "Niezrozumiałe polecenie nie tworzy przebiegu i historii",
+      "passed": true
+    },
+    {
+      "name": "Brak aktywnej generacji na zakończenie prób",
+      "passed": true
+    },
+    {
+      "name": "Scena została w akcie II po wyborze innego kontekstu",
+      "passed": true
+    },
+    {
+      "name": "Przeniesienie zachowuje treść i obsadę",
+      "passed": true
+    },
+    {
+      "name": "Dane identyczne po ponownym logowaniu",
+      "passed": true
+    },
+    {
+      "name": "Historia sukcesów po jednym wpisie na każdą z trzech scen",
+      "passed": true
+    }
+  ]
+}

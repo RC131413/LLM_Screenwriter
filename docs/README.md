@@ -10,6 +10,7 @@ warunki wcześniejszych prób; ich datowane wyniki odnoszą się do opisanego et
 - [Courier Prime](courier-prime.md) — pochodzenie i zastosowanie czcionki w eksporcie PDF.
 - [Django + React + WhiteNoise](single-origin.md) — wspólny adres, Docker i wydzielona obsługa kont.
 - [Zrzuty aplikacji](screenshots/) — dziewięć oryginalnych obrazów wykorzystanych w galerii README.
+- [Testy aplikacji](testy_aplikacji/RAPORT.md) — krótki raport, galeria zrzutów i zapisane wyniki.
 
 Teoretyczne przykłady w [deployment/](../deployment/) nie są używane do uruchamiania aplikacji.
 Licencje pozostają w katalogu

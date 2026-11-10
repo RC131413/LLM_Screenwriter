@@ -778,6 +778,7 @@ Kopia zawiera dane użytkowników i scenariuszy. Przechowuj ją poza publiczną 
 | Dokument | Zawartość |
 | --- | --- |
 | [Spis dokumentacji](docs/README.md) | Nawigacja po materiałach projektu. |
+| [Testy aplikacji](docs/testy_aplikacji/RAPORT.md) | Krótki raport, galeria zrzutów i zapisane wyniki. |
 | [Django + React + WhiteNoise](docs/single-origin.md) | Szczegóły integracji pod jednym adresem i wydzielenia kont. |
 | [Audyt bezpieczeństwa](docs/SECURITY_AUDIT.md) | Zastosowane zabezpieczenia, kontrola zależności i zakres niewdrożonych elementów. |
 | [Zwięzłe odpowiedzi agentów](docs/agent-brevity-comparison.md) | Warunki i wyniki prób Archiwisty oraz Krytyka, w tym odchylenia pomiarów. |
